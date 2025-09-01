@@ -6,6 +6,7 @@ import {
   User, 
   AdminUser,
   GameWeek, 
+  Season,
   Competition, 
   Team, 
   Player, 
@@ -14,10 +15,19 @@ import {
   Content, 
   DashboardStats,
   ApiParams,
-  LoginFormData,
   CreateGameWeekData,
+  UpdateGameWeekDeadlinesData,
   CreateCompetitionData,
-  UpdateUserData
+  CreateSeasonData,
+  UpdateCompetitionData,
+  UpdateUserData,
+  FantasyRoaster,
+  FantasyPlayer,
+  CreateFantasyRoasterData,
+  UpdatePlayerRatingData,
+  UpdateRoasterStatusData,
+  AddPlayerData,
+  RemovePlayerData
 } from '@/types'
 
 // Create axios instance
@@ -126,7 +136,7 @@ export const usersAPI = {
   },
 }
 
-// Game Weeks API
+// Game Weeks API  
 export const gameWeeksAPI = {
   getAll: async (params?: ApiParams): Promise<ApiResponse<PaginatedResponse<GameWeek>>> => {
     const response = await api.get('/api/v1/gameweek', { params })
@@ -168,6 +178,27 @@ export const gameWeeksAPI = {
     const response = await api.patch(`/api/v1/gameweek/${id}/status`, { status })
     return response.data
   },
+
+  updateDeadlines: async (id: string, data: UpdateGameWeekDeadlinesData): Promise<ApiResponse<GameWeek>> => {
+    const response = await api.patch(`/api/v1/gameweek/${id}/deadline`, data)
+    return response.data
+  },
+
+  // Mark game week as done
+  markDone: async (id: string, is_done: boolean = true): Promise<ApiResponse<GameWeek>> => {
+    console.log('🔍 [API] Calling markDone:', { id, is_done, url: `/api/v1/gameweek/done/${id}` })
+    const response = await api.patch(`/api/v1/gameweek/done/${id}`, { is_done })
+    console.log('✅ [API] markDone response:', response.data)
+    return response.data
+  },
+
+  // Fetch player stats for a game week
+  fetchPlayerStats: async (id: string): Promise<ApiResponse<{ message: string }>> => {
+    console.log('🔍 [API] Calling fetchPlayerStats:', { id, url: `/api/v1/gameweek/${id}/fetchplayerstat` })
+    const response = await api.get(`/api/v1/gameweek/${id}/fetchplayerstat`)
+    console.log('✅ [API] fetchPlayerStats response:', response.data)
+    return response.data
+  },
 }
 
 // Competitions API
@@ -194,12 +225,13 @@ export const competitionsAPI = {
   },
   
   create: async (data: CreateCompetitionData): Promise<ApiResponse<Competition>> => {
-    const response = await api.post('/api/v1/competitions', data)
+    // Add query param to allow completed competitions for testing
+    const response = await api.post('/api/v1/competitions?allow_completed=true', data)
     return response.data
   },
   
-  update: async (id: string, data: Partial<CreateCompetitionData>): Promise<ApiResponse<Competition>> => {
-    const response = await api.put(`/api/v1/competitions/${id}`, data)
+  update: async (id: string, data: UpdateCompetitionData): Promise<ApiResponse<Competition>> => {
+    const response = await api.patch(`/api/v1/competitions/${id}`, data)
     return response.data
   },
   
@@ -209,11 +241,69 @@ export const competitionsAPI = {
   },
 }
 
+// Seasons API
+export const seasonsAPI = {
+  getAll: async (params?: ApiParams): Promise<ApiResponse<PaginatedResponse<Season>>> => {
+    const response = await api.get('/api/v1/season/all', { params })
+    // Normalize the response to match our expected structure
+    const normalizedData = {
+      ...response.data,
+      data: {
+        data: response.data.data?.season || [],
+        total: response.data.results || 0,
+        page: params?.page || 1,
+        limit: params?.limit || 10,
+        totalPages: Math.ceil((response.data.results || 0) / (params?.limit || 10))
+      }
+    }
+    return normalizedData
+  },
+  
+  getById: async (id: string): Promise<ApiResponse<Season>> => {
+    const response = await api.get(`/api/v1/season/${id}`)
+    return response.data
+  },
+
+  create: async (data: CreateSeasonData): Promise<ApiResponse<Season>> => {
+    const response = await api.post('/api/v1/season', data)
+    return response.data
+  },
+
+  update: async (id: string, data: Partial<CreateSeasonData>): Promise<ApiResponse<Season>> => {
+    const response = await api.patch(`/api/v1/season/${id}`, data)
+    return response.data
+  },
+
+  updateStatus: async (id: string, is_active: boolean): Promise<ApiResponse<Season>> => {
+    const response = await api.patch(`/api/v1/season/status/${id}`, { is_active })
+    return response.data
+  },
+
+  delete: async (delete_key: string): Promise<ApiResponse> => {
+    const response = await api.delete('/api/v1/season', { data: { delete_key } })
+    return response.data
+  },
+}
+
 // Teams API
 export const teamsAPI = {
   getAll: async (params?: ApiParams): Promise<ApiResponse<PaginatedResponse<Team>>> => {
     const response = await api.get('/api/v1/team', { params })
-    return response.data
+    // API shape: { status, results, data: { teams } }
+    const total = response.data?.results ?? (response.data?.data?.teams?.length ?? 0)
+    const page = params?.page || 1
+    const limit = params?.limit || 10
+    const totalPages = Math.ceil(total / limit)
+    return {
+      ...response.data,
+      data: {
+        data: response.data?.data?.teams ?? [],
+        total,
+        page,
+        limit,
+        totalPages,
+      },
+    }
   },
   
   getById: async (id: string): Promise<ApiResponse<Team>> => {
@@ -234,9 +324,22 @@ export const teamsAPI = {
 
 // Players API
 export const playersAPI = {
-  getAll: async (params?: ApiParams): Promise<ApiResponse<PaginatedResponse<Player>>> => {
-    const response = await api.get('/api/v1/playerstat', { params })
-    return response.data
+  getAll: async (): Promise<ApiResponse<PaginatedResponse<Player>>> => {
+    // Admin-friendly list of all-time player stats
+    const response = await api.get('/api/v1/playerstat/all')
+    // API shape: { status, data: { playerStat } }
+    const arr = response.data?.data?.playerStat ?? []
+    return {
+      status: response.data?.status ?? 'SUCCESS',
+      message: 'OK',
+      data: {
+        data: arr,
+        total: arr.length,
+        page: 1,
+        limit: arr.length || 1,
+        totalPages: 1,
+      },
+    }
   },
   
   getById: async (id: string): Promise<ApiResponse<Player>> => {
@@ -359,6 +462,98 @@ export const analyticsAPI = {
   
   getFinancialStats: async (params?: ApiParams): Promise<ApiResponse<DashboardStats>> => {
     const response = await api.get('/api/v1/dashboard/financial', { params })
+    return response.data
+  },
+}
+
+// Fantasy Roaster API
+export const fantasyRoasterAPI = {
+  getFantasyRoasters: async (params?: ApiParams): Promise<ApiResponse<FantasyRoaster[]>> => {
+    const response = await api.get('/api/v1/fantasyroaster', { params })
+    const raw = response.data as unknown as {
+      data?: { fantasyRoaster?: FantasyRoaster[] } | FantasyRoaster[]
+      fantasyRoaster?: FantasyRoaster[]
+      status?: string
+      results?: number
+    }
+    let list: FantasyRoaster[] = []
+    const d = raw?.data
+    if (Array.isArray(d)) {
+      list = d
+    } else if (d && Array.isArray((d as { fantasyRoaster?: FantasyRoaster[] }).fantasyRoaster)) {
+      list = (d as { fantasyRoaster?: FantasyRoaster[] }).fantasyRoaster as FantasyRoaster[]
+    } else if (Array.isArray(raw?.fantasyRoaster)) {
+      list = raw.fantasyRoaster as FantasyRoaster[]
+    }
+    const status: 'SUCCESS' | 'ERROR' = raw?.status === 'ERROR' ? 'ERROR' : 'SUCCESS'
+    return { status, message: 'OK', data: list }
+  },
+
+  getActiveFantasyRoaster: async (): Promise<ApiResponse<FantasyRoaster[]>> => {
+    const response = await api.get('/api/v1/fantasyroaster')
+    const raw = response.data as unknown as {
+      data?: { fantasyRoaster?: FantasyRoaster[] } | FantasyRoaster[]
+      fantasyRoaster?: FantasyRoaster[]
+      status?: string
+      results?: number
+    }
+    let list: FantasyRoaster[] = []
+    const d = raw?.data
+    if (Array.isArray(d)) {
+      list = d
+    } else if (d && Array.isArray((d as { fantasyRoaster?: FantasyRoaster[] }).fantasyRoaster)) {
+      list = (d as { fantasyRoaster?: FantasyRoaster[] }).fantasyRoaster as FantasyRoaster[]
+    } else if (Array.isArray(raw?.fantasyRoaster)) {
+      list = raw.fantasyRoaster as FantasyRoaster[]
+    }
+    const status: 'SUCCESS' | 'ERROR' = raw?.status === 'ERROR' ? 'ERROR' : 'SUCCESS'
+    return { status, message: 'OK', data: list }
+  },
+
+  getFantasyRoaster: async (id: string): Promise<ApiResponse<FantasyRoaster>> => {
+    const response = await api.get(`/api/v1/fantasyroaster/${id}`)
+    return response.data
+  },
+
+  createFantasyRoaster: async (data: CreateFantasyRoasterData): Promise<ApiResponse<FantasyRoaster>> => {
+    const response = await api.post('/api/v1/fantasyroaster', data)
+    return response.data
+  },
+
+  populatePlayersFromAPI: async (): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.get('/api/v1/fantasyroaster/populate-players')
+    return response.data
+  },
+
+  updateRoasterStatus: async (id: string, data: UpdateRoasterStatusData): Promise<ApiResponse<FantasyRoaster>> => {
+    const response = await api.patch(`/api/v1/fantasyroaster/${id}/status`, data)
+    return response.data
+  },
+
+  updatePlayerRating: async (id: string, data: UpdatePlayerRatingData): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.patch(`/api/v1/fantasyroaster/${id}/price`, data)
+    return response.data
+  },
+
+  addPlayerToRoaster: async (id: string, data: AddPlayerData): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.patch(`/api/v1/fantasyroaster/${id}/addplayer`, data)
+    return response.data
+  },
+
+  removePlayerFromRoaster: async (id: string, data: RemovePlayerData): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.patch(`/api/v1/fantasyroaster/${id}/removeplayer`, data)
+    return response.data
+  },
+
+  deleteFantasyRoaster: async (id: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.delete(`/api/v1/fantasyroaster/${id}`)
+    return response.data
+  },
+
+  deleteAllFantasyRoasters: async (deleteKey: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.delete('/api/v1/fantasyroaster', { 
+      data: { delete_key: deleteKey } 
+    })
     return response.data
   },
 }

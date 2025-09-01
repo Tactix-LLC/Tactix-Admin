@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { gameWeeksAPI } from "@/lib/api"
+import { gameWeeksAPI, seasonsAPI, competitionsAPI } from "@/lib/api"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -21,7 +21,7 @@ import {
 } from "lucide-react"
 import { formatDateTime } from "@/lib/utils"
 import { gameWeekStatusOptions } from "@/lib/constants"
-import { GameWeek } from "@/types"
+import { GameWeek, CreateGameWeekData, UpdateGameWeekDeadlinesData } from "@/types"
 
 export default function GameWeeksPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -29,6 +29,24 @@ export default function GameWeeksPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize] = useState(10)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showDeadlineModal, setShowDeadlineModal] = useState(false)
+  const [editingGameWeek, setEditingGameWeek] = useState<GameWeek | null>(null)
+  
+  // Form state
+  const [formData, setFormData] = useState<CreateGameWeekData>({
+    game_week: "",
+    season_id: "",
+    competition_id: "",
+    is_free: false
+  })
+  const [deadlineFormData, setDeadlineFormData] = useState<UpdateGameWeekDeadlinesData>({
+    transfer_deadline: "",
+    purchase_deadline: "",
+    first_match_start_date: "",
+    last_match_end_date: ""
+  })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
   const queryClient = useQueryClient()
 
@@ -40,6 +58,17 @@ export default function GameWeeksPage() {
       search: searchTerm,
       status: statusFilter !== "all" ? statusFilter : undefined,
     }),
+  })
+
+  // Fetch seasons and competitions for the form
+  const { data: seasonsData } = useQuery({
+    queryKey: ["seasons"],
+    queryFn: () => seasonsAPI.getAll({ limit: 100 }),
+  })
+
+  const { data: competitionsData } = useQuery({
+    queryKey: ["competitions"],
+    queryFn: () => competitionsAPI.getAll({ limit: 100 }),
   })
 
   const deleteGameWeekMutation = useMutation({
@@ -56,9 +85,122 @@ export default function GameWeeksPage() {
     },
   })
 
+  const createGameWeekMutation = useMutation({
+    mutationFn: gameWeeksAPI.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["game-weeks"] })
+      setShowCreateModal(false)
+      resetForm()
+      alert("Game week created successfully!")
+    },
+    onError: (error: unknown) => {
+      console.error("Error creating game week:", error)
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
+      alert("Error creating game week: " + errorMessage)
+    },
+  })
+
+  const updateDeadlinesMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateGameWeekDeadlinesData }) => 
+      gameWeeksAPI.updateDeadlines(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["game-weeks"] })
+      setShowDeadlineModal(false)
+      setEditingGameWeek(null)
+      resetDeadlineForm()
+      alert("Game week deadlines updated successfully!")
+    },
+    onError: (error: unknown) => {
+      console.error("Error updating deadlines:", error)
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
+      alert("Error updating deadlines: " + errorMessage)
+    },
+  })
+
+  const fetchPlayerStatsMutation = useMutation({
+    mutationFn: async (id: string) => {
+      console.log('🔍 [ADMIN] Fetching player stats for game week:', id)
+      try {
+        const response = await gameWeeksAPI.fetchPlayerStats(id)
+        console.log('✅ [ADMIN] Fetch player stats response:', response)
+        return response
+      } catch (error) {
+        console.error('❌ [ADMIN] Fetch player stats error:', error)
+        if (error && typeof error === 'object' && 'response' in error) {
+          const axiosError = error as { response?: { data?: unknown; status?: number } }
+          console.error('❌ [ADMIN] Error response data:', axiosError.response?.data)
+          console.error('❌ [ADMIN] Error status:', axiosError.response?.status)
+        }
+        throw error
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["game-weeks"] })
+      alert("Player stats fetched successfully!")
+    },
+    onError: (error: unknown) => {
+      console.error("Error fetching player stats:", error)
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
+      let detailedMessage = errorMessage
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { data?: { message?: string; error?: { statusCode?: number } } } }
+        const responseData = axiosError.response?.data
+        if (responseData?.message) {
+          detailedMessage = `${responseData.message}`
+        }
+        if (responseData?.error?.statusCode) {
+          detailedMessage += ` (Status: ${responseData.error.statusCode})`
+        }
+      }
+      alert("Error fetching player stats: " + detailedMessage)
+    },
+  })
+
+  const markDoneMutation = useMutation({
+    mutationFn: async (id: string) => {
+      console.log('🔍 [ADMIN] Marking game week as done:', id)
+      try {
+        const response = await gameWeeksAPI.markDone(id, true)
+        console.log('✅ [ADMIN] Mark done response:', response)
+        return response
+      } catch (error) {
+        console.error('❌ [ADMIN] Mark done error:', error)
+        if (error && typeof error === 'object' && 'response' in error) {
+          const axiosError = error as { response?: { data?: unknown; status?: number } }
+          console.error('❌ [ADMIN] Error response data:', axiosError.response?.data)
+          console.error('❌ [ADMIN] Error status:', axiosError.response?.status)
+        }
+        throw error
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["game-weeks"] })
+      alert("Game week marked as done. Point calculation will continue in background.")
+    },
+    onError: (error: unknown) => {
+      console.error("Error marking as done:", error)
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
+      let detailedMessage = errorMessage
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { data?: { message?: string; error?: { statusCode?: number } } } }
+        const responseData = axiosError.response?.data
+        if (responseData?.message) {
+          detailedMessage = `${responseData.message}`
+        }
+        if (responseData?.error?.statusCode) {
+          detailedMessage += ` (Status: ${responseData.error.statusCode})`
+        }
+      }
+      alert("Error marking as done: " + detailedMessage)
+    },
+  })
+
   const gameWeeks = gameWeeksData?.data?.data || []
   const totalGameWeeks = gameWeeksData?.data?.total || 0
   const totalPages = Math.ceil(totalGameWeeks / pageSize)
+  
+  const seasons = seasonsData?.data?.data || []
+  const competitions = competitionsData?.data?.data || []
 
   const getStatusBadge = (status: string) => {
     const statusConfig = {
@@ -86,6 +228,127 @@ export default function GameWeeksPage() {
 
   const handleStatusChange = (id: string, newStatus: string) => {
     changeStatusMutation.mutate({ id, status: newStatus })
+  }
+
+  const handleUpdateDeadlines = (gameWeek: GameWeek) => {
+    setEditingGameWeek(gameWeek)
+    // Convert dates to local datetime format for input fields
+    const toLocalDateTime = (dateStr: string) => {
+      const date = new Date(dateStr)
+      return date.toISOString().slice(0, 16) // Format: YYYY-MM-DDTHH:mm
+    }
+    
+    setDeadlineFormData({
+      transfer_deadline: toLocalDateTime(gameWeek.transfer_deadline),
+      purchase_deadline: toLocalDateTime(gameWeek.purchase_deadline),
+      first_match_start_date: toLocalDateTime(gameWeek.first_match_start_date),
+      last_match_end_date: toLocalDateTime(gameWeek.last_match_end_date)
+    })
+    setShowDeadlineModal(true)
+  }
+
+  // Form helper functions
+  const resetForm = () => {
+    setFormData({
+      game_week: "",
+      season_id: "",
+      competition_id: "",
+      is_free: false
+    })
+    setFormErrors({})
+    setIsSubmitting(false)
+  }
+
+  const resetDeadlineForm = () => {
+    setDeadlineFormData({
+      transfer_deadline: "",
+      purchase_deadline: "",
+      first_match_start_date: "",
+      last_match_end_date: ""
+    })
+    setFormErrors({})
+    setIsSubmitting(false)
+  }
+
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {}
+
+    if (!formData.game_week.trim()) {
+      errors.game_week = "Game week name is required"
+    }
+
+    if (!formData.season_id) {
+      errors.season_id = "Please select a season"
+    }
+
+    if (!formData.competition_id) {
+      errors.competition_id = "Please select a competition"
+    }
+
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const handleInputChange = (field: keyof CreateGameWeekData, value: string | boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+    // Clear error for this field when user starts typing
+    if (formErrors[field as string]) {
+      setFormErrors(prev => ({
+        ...prev,
+        [field as string]: ""
+      }))
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!validateForm()) {
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      await createGameWeekMutation.mutateAsync(formData)
+    } catch (error) {
+      console.error("Error in form submission:", error)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleSubmitDeadlines = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!editingGameWeek) return
+
+    setIsSubmitting(true)
+    try {
+      // Convert local datetime back to ISO string
+      const dataToSubmit = {
+        transfer_deadline: new Date(deadlineFormData.transfer_deadline).toISOString(),
+        purchase_deadline: new Date(deadlineFormData.purchase_deadline).toISOString(),
+        first_match_start_date: new Date(deadlineFormData.first_match_start_date).toISOString(),
+        last_match_end_date: new Date(deadlineFormData.last_match_end_date).toISOString()
+      }
+      
+      await updateDeadlinesMutation.mutateAsync({ id: editingGameWeek._id, data: dataToSubmit })
+    } catch (error) {
+      console.error("Error in deadline form submission:", error)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleCloseModal = () => {
+    setShowCreateModal(false)
+    setShowDeadlineModal(false)
+    setEditingGameWeek(null)
+    resetForm()
+    resetDeadlineForm()
   }
 
   if (isLoading) {
@@ -242,13 +505,13 @@ export default function GameWeeksPage() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatDateTime(gameWeek.start_date)}
+                        {formatDateTime(gameWeek.first_match_start_date)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatDateTime(gameWeek.end_date)}
+                        {formatDateTime(gameWeek.last_match_end_date)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(gameWeek.status)}
+                        {getStatusBadge(gameWeek.is_done ? 'completed' : gameWeek.is_active ? 'active' : 'draft')}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {gameWeek.participants_count || 0} users
@@ -264,6 +527,15 @@ export default function GameWeeksPage() {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleUpdateDeadlines(gameWeek)}
+                            className="text-blue-600 hover:text-blue-800"
+                            title="Update Deadlines"
+                          >
+                            <Calendar className="h-4 w-4" />
+                          </Button>
                           <select
                             value={gameWeek.status}
                             onChange={(e) => handleStatusChange(gameWeek._id, e.target.value)}
@@ -275,6 +547,28 @@ export default function GameWeeksPage() {
                               </option>
                             ))}
                           </select>
+                          {!gameWeek.is_done && (
+                            <>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => fetchPlayerStatsMutation.mutate(gameWeek._id)}
+                                className="text-blue-600 hover:text-blue-800"
+                                title="Fetch Player Stats"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => markDoneMutation.mutate(gameWeek._id)}
+                                className="text-green-600 hover:text-green-800"
+                                title="Mark as Done"
+                              >
+                                <CheckCircle className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
                           <Button 
                             variant="ghost" 
                             size="sm"
@@ -323,42 +617,218 @@ export default function GameWeeksPage() {
           </div>
         )}
 
-        {/* Create/Edit Modal would go here */}
-        {/* For now, we'll add a simple form */}
+        {/* Create Game Week Modal */}
         {showCreateModal && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <Card className="w-full max-w-md">
               <CardHeader>
                 <CardTitle>Create Game Week</CardTitle>
-                <CardDescription>Add a new game week</CardDescription>
+                <CardDescription>Add a new game week to the system</CardDescription>
               </CardHeader>
               <CardContent>
-                <form className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Name</label>
-                    <Input placeholder="Game Week Name" />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Game Week Name *
+                    </label>
+                    <Input 
+                      placeholder="e.g., Game Week 1, Matchday 15" 
+                      value={formData.game_week}
+                      onChange={(e) => handleInputChange("game_week", e.target.value)}
+                    />
+                    {formErrors.game_week && (
+                      <p className="text-red-500 text-xs mt-1">{formErrors.game_week}</p>
+                    )}
                   </div>
+                  
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Week Number</label>
-                    <Input type="number" placeholder="1" />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Season *
+                    </label>
+                    <select
+                      value={formData.season_id}
+                      onChange={(e) => handleInputChange("season_id", e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      <option value="">Select a season</option>
+                      {seasons.map(season => (
+                        <option key={season._id} value={season._id}>
+                          {season.name}
+                        </option>
+                      ))}
+                    </select>
+                    {formErrors.season_id && (
+                      <p className="text-red-500 text-xs mt-1">{formErrors.season_id}</p>
+                    )}
                   </div>
+                  
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Start Date</label>
-                    <Input type="datetime-local" />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Competition *
+                    </label>
+                    <select
+                      value={formData.competition_id}
+                      onChange={(e) => handleInputChange("competition_id", e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      <option value="">Select a competition</option>
+                      {competitions.map(competition => (
+                        <option key={competition._id} value={competition._id}>
+                          {competition.competition_name}
+                        </option>
+                      ))}
+                    </select>
+                    {formErrors.competition_id && (
+                      <p className="text-red-500 text-xs mt-1">{formErrors.competition_id}</p>
+                    )}
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">End Date</label>
-                    <Input type="datetime-local" />
+                    <label className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.is_free}
+                        onChange={(e) => handleInputChange("is_free", e.target.checked)}
+                        className="rounded border-gray-300 text-primary-500 focus:ring-primary-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">
+                        Free Game Week
+                      </span>
+                    </label>
+                    <p className="text-xs text-gray-500 mt-1">
+                      If checked, players wont be charged for participating in this game week
+                    </p>
                   </div>
-                  <div className="flex space-x-2">
+                  
+                  <div className="flex space-x-2 pt-4">
                     <Button 
                       type="button" 
-                      onClick={() => setShowCreateModal(false)}
+                      onClick={handleCloseModal}
                       variant="outline"
+                      disabled={isSubmitting}
+                      className="flex-1"
                     >
                       Cancel
                     </Button>
-                    <Button type="submit">Create</Button>
+                    <Button 
+                      type="submit" 
+                      disabled={isSubmitting}
+                      className="flex-1"
+                    >
+                      {isSubmitting ? "Creating..." : "Create Game Week"}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Update Deadlines Modal */}
+        {showDeadlineModal && editingGameWeek && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-lg">
+              <CardHeader>
+                <CardTitle>Update Game Week Deadlines</CardTitle>
+                <CardDescription>
+                  Extend or modify deadlines for &ldquo;{editingGameWeek.game_week}&rdquo;
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSubmitDeadlines} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Transfer Deadline *
+                      </label>
+                      <Input 
+                        type="datetime-local"
+                        value={deadlineFormData.transfer_deadline}
+                        onChange={(e) => setDeadlineFormData(prev => ({
+                          ...prev,
+                          transfer_deadline: e.target.value
+                        }))}
+                        required
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Last time users can make transfers
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Purchase Deadline *
+                      </label>
+                      <Input 
+                        type="datetime-local"
+                        value={deadlineFormData.purchase_deadline}
+                        onChange={(e) => setDeadlineFormData(prev => ({
+                          ...prev,
+                          purchase_deadline: e.target.value
+                        }))}
+                        required
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Last time users can join the game week
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        First Match Start *
+                      </label>
+                      <Input 
+                        type="datetime-local"
+                        value={deadlineFormData.first_match_start_date}
+                        onChange={(e) => setDeadlineFormData(prev => ({
+                          ...prev,
+                          first_match_start_date: e.target.value
+                        }))}
+                        required
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Last Match End *
+                      </label>
+                      <Input 
+                        type="datetime-local"
+                        value={deadlineFormData.last_match_end_date}
+                        onChange={(e) => setDeadlineFormData(prev => ({
+                          ...prev,
+                          last_match_end_date: e.target.value
+                        }))}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                    <p className="text-sm text-yellow-800">
+                      <strong>💡 Pro Tip:</strong> To extend join deadline, update the &ldquo;Purchase Deadline&rdquo; to a future time.
+                    </p>
+                  </div>
+                  
+                  <div className="flex space-x-2 pt-4">
+                    <Button 
+                      type="button" 
+                      onClick={handleCloseModal}
+                      variant="outline"
+                      disabled={isSubmitting}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      disabled={isSubmitting}
+                      className="flex-1"
+                    >
+                      {isSubmitting ? "Updating..." : "Update Deadlines"}
+                    </Button>
                   </div>
                 </form>
               </CardContent>
