@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { competitionsAPI } from "@/lib/api"
+import { competitionsAPI, seasonsAPI } from "@/lib/api"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -20,7 +20,7 @@ import {
 } from "lucide-react"
 import { formatDateTime } from "@/lib/utils"
 import { competitionStatusOptions } from "@/lib/constants"
-import { Competition } from "@/types"
+import { Competition, CreateCompetitionData, UpdateCompetitionData } from "@/types"
 
 export default function CompetitionsPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -28,6 +28,19 @@ export default function CompetitionsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize] = useState(10)
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingCompetition, setEditingCompetition] = useState<Competition | null>(null)
+  
+  // Form state
+  const [formData, setFormData] = useState<CreateCompetitionData>({
+    cid: "",
+    season: ""
+  })
+  const [editFormData, setEditFormData] = useState<UpdateCompetitionData>({
+    cid: ""
+  })
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({})
 
   const queryClient = useQueryClient()
 
@@ -41,6 +54,44 @@ export default function CompetitionsPage() {
     }),
   })
 
+  // Fetch seasons for the form
+  const { data: seasonsData } = useQuery({
+    queryKey: ["seasons"],
+    queryFn: () => seasonsAPI.getAll({ limit: 100 }),
+  })
+
+  const createCompetitionMutation = useMutation({
+    mutationFn: competitionsAPI.create,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["competitions"] })
+      setShowCreateModal(false)
+      resetForm()
+      alert("Competition created successfully!")
+    },
+    onError: (error: unknown) => {
+      console.error("Error creating competition:", error)
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
+      alert("Error creating competition: " + errorMessage)
+    },
+  })
+
+  const updateCompetitionMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateCompetitionData }) => 
+      competitionsAPI.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["competitions"] })
+      setShowEditModal(false)
+      setEditingCompetition(null)
+      resetEditForm()
+      alert("Competition updated successfully!")
+    },
+    onError: (error: unknown) => {
+      console.error("Error updating competition:", error)
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
+      alert("Error updating competition: " + errorMessage)
+    },
+  })
+
   const deleteCompetitionMutation = useMutation({
     mutationFn: competitionsAPI.delete,
     onSuccess: () => {
@@ -51,16 +102,17 @@ export default function CompetitionsPage() {
   const competitions = competitionsData?.data?.data || []
   const totalCompetitions = competitionsData?.data?.total || 0
   const totalPages = Math.ceil(totalCompetitions / pageSize)
+  
+  const seasons = seasonsData?.data?.data || []
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: number) => {
     const statusConfig = {
-      upcoming: { color: "bg-blue-100 text-blue-800", label: "Upcoming" },
-      active: { color: "bg-green-100 text-green-800", label: "Active" },
-      completed: { color: "bg-gray-100 text-gray-800", label: "Completed" },
-      cancelled: { color: "bg-red-100 text-red-800", label: "Cancelled" },
+      1: { color: "bg-green-100 text-green-800", label: "Active" },
+      2: { color: "bg-gray-100 text-gray-800", label: "Completed" },
+      3: { color: "bg-red-100 text-red-800", label: "Cancelled" },
     }
     
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.upcoming
+    const config = statusConfig[status as keyof typeof statusConfig] || { color: "bg-blue-100 text-blue-800", label: "Unknown" }
     return (
       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.color}`}>
         {config.label}
@@ -72,6 +124,107 @@ export default function CompetitionsPage() {
     if (confirm("Are you sure you want to delete this competition?")) {
       deleteCompetitionMutation.mutate(id)
     }
+  }
+
+  const handleEditCompetition = (competition: Competition) => {
+    setEditingCompetition(competition)
+    setEditFormData({ cid: competition.cid })
+    setShowEditModal(true)
+  }
+
+  // Form helper functions
+  const resetForm = () => {
+    setFormData({
+      cid: "",
+      season: ""
+    })
+    setFormErrors({})
+    setIsSubmitting(false)
+  }
+
+  const resetEditForm = () => {
+    setEditFormData({
+      cid: ""
+    })
+    setFormErrors({})
+    setIsSubmitting(false)
+  }
+
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {}
+
+    if (!formData.cid.trim()) {
+      errors.cid = "Competition ID is required"
+    }
+
+    if (!formData.season) {
+      errors.season = "Please select a season"
+    }
+
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const handleInputChange = (field: keyof CreateCompetitionData, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+    // Clear error for this field when user starts typing
+    if (formErrors[field as string]) {
+      setFormErrors(prev => ({
+        ...prev,
+        [field as string]: ""
+      }))
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!validateForm()) {
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      await createCompetitionMutation.mutateAsync(formData)
+    } catch (error) {
+      console.error("Error in form submission:", error)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!editFormData.cid.trim()) {
+      setFormErrors({ cid: "Competition ID is required" })
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      if (editingCompetition) {
+        await updateCompetitionMutation.mutateAsync({ 
+          id: editingCompetition._id, 
+          data: editFormData 
+        })
+      }
+    } catch (error) {
+      console.error("Error in form submission:", error)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleCloseModal = () => {
+    setShowCreateModal(false)
+    setShowEditModal(false)
+    setEditingCompetition(null)
+    resetForm()
+    resetEditForm()
   }
 
   if (isLoading) {
@@ -126,29 +279,29 @@ export default function CompetitionsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {competitions.filter((comp: Competition) => comp.status === 'active').length}
+                {competitions.filter((comp: Competition) => comp.status === 1).length}
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Participants</CardTitle>
+              <CardTitle className="text-sm font-medium">Completed</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {competitions.reduce((total, comp: Competition) => total + (comp.participants_count || 0), 0)}
+                {competitions.filter((comp: Competition) => comp.status === 2).length}
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Prize Pool</CardTitle>
+              <CardTitle className="text-sm font-medium">Cancelled</CardTitle>
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                ${competitions.reduce((total, comp: Competition) => total + (comp.prize_pool || 0), 0).toLocaleString()}
+                {competitions.filter((comp: Competition) => comp.status === 3).length}
               </div>
             </CardContent>
           </Card>
@@ -192,43 +345,46 @@ export default function CompetitionsPage() {
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Competition
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Start Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      End Date
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Participants
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Prize Pool
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
+                                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Competition
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        CID
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Start Date
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        End Date
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Active
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {competitions.map((competition: Competition) => (
                     <tr key={competition._id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
                           <div className="text-sm font-medium text-gray-900">
-                            {competition.name}
+                            {competition.competition_name}
                           </div>
                           <div className="text-sm text-gray-500">
-                            {competition.description}
+                            {competition.competition_slug}
                           </div>
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {competition.cid}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatDateTime(competition.start_date)}
@@ -239,18 +395,23 @@ export default function CompetitionsPage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         {getStatusBadge(competition.status)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {competition.participants_count || 0} users
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        ${(competition.prize_pool || 0).toLocaleString()}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          competition.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {competition.is_active ? 'Yes' : 'No'}
+                        </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center space-x-2">
                           <Button variant="ghost" size="sm">
                             <Eye className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="sm">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleEditCompetition(competition)}
+                          >
                             <Edit className="h-4 w-4" />
                           </Button>
                           <Button 
@@ -307,39 +468,122 @@ export default function CompetitionsPage() {
             <Card className="w-full max-w-md">
               <CardHeader>
                 <CardTitle>Create Competition</CardTitle>
-                <CardDescription>Add a new competition</CardDescription>
+                <CardDescription>Add a new competition from EntitySport</CardDescription>
               </CardHeader>
               <CardContent>
-                <form className="space-y-4">
+                <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Name</label>
-                    <Input placeholder="Competition Name" />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Competition ID (CID) *
+                    </label>
+                    <Input 
+                      placeholder="e.g., 992"
+                      value={formData.cid}
+                      onChange={(e) => handleInputChange("cid", e.target.value)}
+                    />
+                    {formErrors.cid && (
+                      <p className="text-red-500 text-xs mt-1">{formErrors.cid}</p>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      EntitySport Competition ID
+                    </p>
                   </div>
+                  
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Description</label>
-                    <Input placeholder="Competition Description" />
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Season *
+                    </label>
+                    <select
+                      value={formData.season}
+                      onChange={(e) => handleInputChange("season", e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      <option value="">Select a season</option>
+                      {seasons.map(season => (
+                        <option key={season._id} value={season._id}>
+                          {season.name}
+                        </option>
+                      ))}
+                    </select>
+                    {formErrors.season && (
+                      <p className="text-red-500 text-xs mt-1">{formErrors.season}</p>
+                    )}
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Start Date</label>
-                    <Input type="datetime-local" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">End Date</label>
-                    <Input type="datetime-local" />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Prize Pool</label>
-                    <Input type="number" placeholder="1000" />
-                  </div>
-                  <div className="flex space-x-2">
+                  
+                  <div className="flex space-x-2 pt-4">
                     <Button 
                       type="button" 
-                      onClick={() => setShowCreateModal(false)}
+                      onClick={handleCloseModal}
                       variant="outline"
+                      disabled={isSubmitting}
+                      className="flex-1"
                     >
                       Cancel
                     </Button>
-                    <Button type="submit">Create</Button>
+                    <Button 
+                      type="submit" 
+                      disabled={isSubmitting}
+                      className="flex-1"
+                    >
+                      {isSubmitting ? "Creating..." : "Create Competition"}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Edit Competition Modal */}
+        {showEditModal && editingCompetition && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-md">
+              <CardHeader>
+                <CardTitle>Edit Competition</CardTitle>
+                <CardDescription>Update the competition CID from EntitySport</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleEditSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Competition ID (CID) *
+                    </label>
+                    <Input 
+                      placeholder="e.g., 992"
+                      value={editFormData.cid}
+                      onChange={(e) => setEditFormData({ cid: e.target.value })}
+                    />
+                    {formErrors.cid && (
+                      <p className="text-red-500 text-xs mt-1">{formErrors.cid}</p>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      EntitySport Competition ID
+                    </p>
+                  </div>
+
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-sm text-gray-600 mb-1">Current Details:</p>
+                    <p className="text-sm font-medium text-gray-900">{editingCompetition.competition_name}</p>
+                    <p className="text-xs text-gray-500">Current CID: {editingCompetition.cid}</p>
+                  </div>
+                  
+                  <div className="flex space-x-2 pt-4">
+                    <Button 
+                      type="button" 
+                      onClick={handleCloseModal}
+                      variant="outline"
+                      disabled={isSubmitting}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      disabled={isSubmitting}
+                      className="flex-1"
+                    >
+                      {isSubmitting ? "Updating..." : "Update Competition"}
+                    </Button>
                   </div>
                 </form>
               </CardContent>

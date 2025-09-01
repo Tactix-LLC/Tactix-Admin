@@ -49,28 +49,65 @@ export interface AdminUser {
 // Game Week Types
 export interface GameWeek {
   _id: string
+  game_week: string
+  sid: string
+  cid: string
+  season_id: string
+  competition_id: string
+  transfer_deadline: string
+  purchase_deadline: string
+  is_free: boolean
+  is_done: boolean
+  is_active: boolean
+  first_match_start_date: string
+  last_match_end_date: string
+  match_ids: string[]
+  time_interval?: string
+  is_double_gameweek: boolean
+  double_gameweek_first_match?: string
+  double_gameweek_transfer_deadline?: string
+  double_gameweek_teams?: string[]
+  createdAt: string
+  updatedAt: string
+  // Legacy fields for backward compatibility
   name?: string
-  week_number: number
-  start_date: string
-  end_date: string
-  status: 'draft' | 'active' | 'completed' | 'cancelled'
+  week_number?: number
+  start_date?: string
+  end_date?: string
+  status?: string
   participants_count?: number
-  created_at: string
-  updated_at: string
+  created_at?: string
+  updated_at?: string
+}
+
+// Season Types  
+export interface Season {
+  _id: string
+  name: string
+  season_id: string
+  is_active: boolean
+  createdAt: string
+  updatedAt: string
+  competitions?: Competition[]
 }
 
 // Competition Types
 export interface Competition {
   _id: string
-  name: string
-  description?: string
+  competition_name: string
+  competition_slug: string
+  cid: string
+  sid: string
+  logo?: string
+  is_active: boolean
   start_date: string
   end_date: string
-  status: 'upcoming' | 'active' | 'completed' | 'cancelled'
+  status: number // 1=active, 2=completed, 3=cancelled
+  season: string
+  createdAt: string
+  updatedAt: string
   participants_count?: number
   prize_pool?: number
-  created_at: string
-  updated_at: string
 }
 
 // Team Types
@@ -100,6 +137,65 @@ export interface Player {
   status: 'active' | 'injured' | 'suspended'
   created_at: string
   updated_at: string
+}
+
+// Fantasy Roaster Types
+export interface FantasyPlayer {
+  pid: string
+  pname: string
+  role: string
+  rating: string
+  prev_rating?: string
+  transfer_radar?: boolean
+  is_new?: boolean
+  is_injuried?: boolean
+  is_banned?: boolean
+  team: {
+    tid: string
+    tname: string
+    fullname: string
+    abbr: string
+    logo: string
+  }
+}
+
+export interface FantasyRoaster {
+  _id: string
+  season_name: string
+  is_active: boolean
+  players: FantasyPlayer[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateFantasyRoasterData {
+  season_name: string
+  players: FantasyPlayer[]
+}
+
+export interface UpdatePlayerRatingData {
+  pid: string
+  rating: number
+}
+
+export interface UpdateRoasterStatusData {
+  is_active: boolean
+}
+
+export interface AddPlayerData {
+  pid: string
+  pname: string
+  rating: number
+  role: string
+  tid: string
+  tname: string
+  logo: string
+  fullname: string
+  abbr: string
+}
+
+export interface RemovePlayerData {
+  pid: string
 }
 
 // Transaction Types
@@ -155,20 +251,31 @@ export interface LoginFormData {
 }
 
 export interface CreateGameWeekData {
-  name?: string
-  week_number: number
-  start_date: string
-  end_date: string
-  status?: string
+  game_week: string
+  season_id: string
+  competition_id: string
+  is_free?: boolean
+}
+
+export interface UpdateGameWeekDeadlinesData {
+  transfer_deadline: string
+  purchase_deadline: string
+  first_match_start_date: string
+  last_match_end_date: string
+  time_interval?: string
 }
 
 export interface CreateCompetitionData {
+  cid: string
+  season: string
+}
+
+export interface UpdateCompetitionData {
+  cid: string
+}
+
+export interface CreateSeasonData {
   name: string
-  description?: string
-  start_date: string
-  end_date: string
-  prize_pool?: number
-  status?: string
 }
 
 export interface UpdateUserData {

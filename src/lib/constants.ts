@@ -91,6 +91,11 @@ export const navigationItems = [
     icon: 'Trophy',
   },
   {
+    title: 'Seasons',
+    href: '/seasons',
+    icon: 'Calendar',
+  },
+  {
     title: 'Teams',
     href: '/teams',
     icon: 'Shield',
@@ -99,6 +104,11 @@ export const navigationItems = [
     title: 'Players',
     href: '/players',
     icon: 'UserCheck',
+  },
+  {
+    title: 'Fantasy Roasters',
+    href: '/fantasy-roasters',
+    icon: 'Users',
   },
   {
     title: 'Financial',
@@ -140,10 +150,9 @@ export const gameWeekStatusOptions = [
 
 // Competition status options
 export const competitionStatusOptions = [
-  { value: 'upcoming', label: 'Upcoming' },
-  { value: 'active', label: 'Active' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' },
+  { value: '1', label: 'Active' },
+  { value: '2', label: 'Completed' },
+  { value: '3', label: 'Cancelled' },
 ]
 
 // Pagination options
