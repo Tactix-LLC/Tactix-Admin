@@ -18,6 +18,8 @@ import {
   Pause,
   CheckCircle,
   XCircle,
+  Users,
+  UserCheck,
 } from "lucide-react"
 import { formatDateTime } from "@/lib/utils"
 import { gameWeekStatusOptions } from "@/lib/constants"
@@ -30,7 +32,9 @@ export default function GameWeeksPage() {
   const [pageSize] = useState(10)
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showDeadlineModal, setShowDeadlineModal] = useState(false)
+  const [showJoinedUsersModal, setShowJoinedUsersModal] = useState(false)
   const [editingGameWeek, setEditingGameWeek] = useState<GameWeek | null>(null)
+  const [selectedGameWeekForUsers, setSelectedGameWeekForUsers] = useState<GameWeek | null>(null)
   
   // Form state
   const [formData, setFormData] = useState<CreateGameWeekData>({
@@ -192,6 +196,60 @@ export default function GameWeeksPage() {
         }
       }
       alert("Error marking as done: " + detailedMessage)
+    },
+  })
+
+  // Auto-join mutations
+  const triggerAutoJoinMutation = useMutation({
+    mutationFn: async (id: string) => {
+      console.log('🔍 [ADMIN] Triggering auto-join for game week:', id)
+      try {
+        const response = await gameWeeksAPI.triggerAutoJoin(id)
+        console.log('✅ [ADMIN] Trigger auto-join response:', response)
+        return response
+      } catch (error) {
+        console.error('❌ [ADMIN] Trigger auto-join error:', error)
+        throw error
+      }
+    },
+    onSuccess: (data) => {
+      const results = data.data?.results
+      if (results) {
+        alert(`Auto-join completed! Success: ${results.success}, Failed: ${results.failed}, Total: ${results.totalProcessed}`)
+        if (results.errors.length > 0) {
+          console.warn('Auto-join errors:', results.errors)
+        }
+      }
+      queryClient.invalidateQueries({ queryKey: ["game-weeks"] })
+    },
+    onError: (error: unknown) => {
+      console.error("Error triggering auto-join:", error)
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
+      alert("Error triggering auto-join: " + errorMessage)
+    },
+  })
+
+  // Get joined users mutation
+  const getJoinedUsersMutation = useMutation({
+    mutationFn: async (gameWeekId: string) => {
+      console.log('🔍 [ADMIN] Getting joined users for game week:', gameWeekId)
+      try {
+        const response = await gameWeeksAPI.getJoinedUsers(gameWeekId)
+        console.log('✅ [ADMIN] Get joined users response:', response)
+        return response
+      } catch (error) {
+        console.error('❌ [ADMIN] Get joined users error:', error)
+        throw error
+      }
+    },
+    onSuccess: (data) => {
+      console.log('✅ [ADMIN] Joined users retrieved successfully:', data)
+      setShowJoinedUsersModal(true)
+    },
+    onError: (error: unknown) => {
+      console.error('❌ [ADMIN] Get joined users failed:', error)
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
+      alert("Error getting joined users: " + errorMessage)
     },
   })
 
@@ -561,6 +619,29 @@ export default function GameWeeksPage() {
                               <Button 
                                 variant="ghost" 
                                 size="sm"
+                                onClick={() => triggerAutoJoinMutation.mutate(gameWeek._id)}
+                                className="text-purple-600 hover:text-purple-800"
+                                title="Trigger Auto-Join"
+                                disabled={triggerAutoJoinMutation.isPending}
+                              >
+                                <Users className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedGameWeekForUsers(gameWeek)
+                                  getJoinedUsersMutation.mutate(gameWeek._id)
+                                }}
+                                className="text-blue-600 hover:text-blue-800"
+                                title="View Joined Users"
+                                disabled={getJoinedUsersMutation.isPending}
+                              >
+                                <UserCheck className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
                                 onClick={() => markDoneMutation.mutate(gameWeek._id)}
                                 className="text-green-600 hover:text-green-800"
                                 title="Mark as Done"
@@ -831,6 +912,61 @@ export default function GameWeeksPage() {
                     </Button>
                   </div>
                 </form>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Joined Users Modal */}
+        {showJoinedUsersModal && selectedGameWeekForUsers && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-4xl max-h-[80vh] overflow-hidden">
+              <CardHeader>
+                <CardTitle>Joined Users - {selectedGameWeekForUsers.game_week}</CardTitle>
+                <CardDescription>
+                  Users who have joined this game week
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="overflow-y-auto">
+                {getJoinedUsersMutation.data?.data?.joinedUsers ? (
+                  <div className="space-y-4">
+                    <div className="text-sm text-gray-600 mb-4">
+                      Total joined users: {getJoinedUsersMutation.data.data.joinedUsers.length}
+                    </div>
+                    <div className="grid gap-4">
+                      {getJoinedUsersMutation.data.data.joinedUsers.map((user: { client_id: string; team_id: string; total_point: number; players: unknown[] }, index: number) => (
+                        <div key={index} className="border rounded-lg p-4 bg-gray-50">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <h4 className="font-medium">User ID: {user.client_id}</h4>
+                              <p className="text-sm text-gray-600">Team ID: {user.team_id}</p>
+                              <p className="text-sm text-gray-600">Total Points: {user.total_point || 0}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm text-gray-600">Players: {user.players?.length || 0}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">No users have joined this game week yet.</p>
+                  </div>
+                )}
+                
+                <div className="flex justify-end pt-4">
+                  <Button 
+                    onClick={() => {
+                      setShowJoinedUsersModal(false)
+                      setSelectedGameWeekForUsers(null)
+                    }}
+                    variant="outline"
+                  >
+                    Close
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           </div>
