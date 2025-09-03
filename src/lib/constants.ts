@@ -111,6 +111,11 @@ export const navigationItems = [
     icon: 'Users',
   },
   {
+    title: 'System Settings',
+    href: '/system-settings',
+    icon: 'Settings',
+  },
+  {
     title: 'Financial',
     href: '/financial',
     icon: 'DollarSign',

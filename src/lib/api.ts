@@ -199,6 +199,36 @@ export const gameWeeksAPI = {
     console.log('✅ [API] fetchPlayerStats response:', response.data)
     return response.data
   },
+
+  // Auto-join functionality
+  triggerAutoJoin: async (id: string): Promise<ApiResponse<{ gameWeekId: string; results: { success: number; failed: number; totalProcessed: number; errors: string[] } }>> => {
+    console.log('🔍 [API] Calling triggerAutoJoin:', { id, url: `/api/v1/gameweek/${id}/auto-join` })
+    const response = await api.post(`/api/v1/gameweek/${id}/auto-join`)
+    console.log('✅ [API] triggerAutoJoin response:', response.data)
+    return response.data
+  },
+
+  getAutoJoinStatus: async (): Promise<ApiResponse<{ scheduledJobs: Array<{ gameWeekId: string; nextInvocation: string | null }> }>> => {
+    console.log('🔍 [API] Calling getAutoJoinStatus:', { url: `/api/v1/gameweek/auto-join/status` })
+    const response = await api.get('/api/v1/gameweek/auto-join/status')
+    console.log('✅ [API] getAutoJoinStatus response:', response.data)
+    return response.data
+  },
+
+  rescheduleAutoJoinJobs: async (): Promise<ApiResponse<{ rescheduledJobs: number; scheduledJobs: Array<{ gameWeekId: string; nextInvocation: string | null }> }>> => {
+    console.log('🔍 [API] Calling rescheduleAutoJoinJobs:', { url: `/api/v1/gameweek/auto-join/reschedule` })
+    const response = await api.post('/api/v1/gameweek/auto-join/reschedule')
+    console.log('✅ [API] rescheduleAutoJoinJobs response:', response.data)
+    return response.data
+  },
+
+  // Get joined users for a game week
+  getJoinedUsers: async (gameWeekId: string): Promise<ApiResponse<{ joinedUsers: Array<{ client_id: string; team_id: string; total_point: number; players: unknown[] }> }>> => {
+    console.log('🔍 [API] Calling getJoinedUsers:', { gameWeekId, url: `/api/v1/gameweekteam?game_week_id=${gameWeekId}` })
+    const response = await api.get(`/api/v1/gameweekteam?game_week_id=${gameWeekId}`)
+    console.log('✅ [API] getJoinedUsers response:', response.data)
+    return response.data
+  },
 }
 
 // Competitions API
@@ -557,5 +587,38 @@ export const fantasyRoasterAPI = {
     return response.data
   },
 }
+
+// System Settings API
+export const systemSettingsAPI = {
+  // Get system settings
+  getSystemSettings: async () => {
+    const response = await api.get("/api/v1/system-settings");
+    return response.data;
+  },
+
+  // Update system settings
+  updateSystemSettings: async (updates: Record<string, unknown>) => {
+    const response = await api.patch("/api/v1/system-settings", updates);
+    return response.data;
+  },
+
+  // Reset to default settings
+  resetToDefaultSettings: async () => {
+    const response = await api.post("/api/v1/system-settings/reset");
+    return response.data;
+  },
+
+  // Get point system
+  getPointSystem: async () => {
+    const response = await api.get("/api/v1/system-settings/point-system");
+    return response.data;
+  },
+
+  // Update point system
+  updatePointSystem: async (updates: Record<string, unknown>) => {
+    const response = await api.patch("/api/v1/system-settings/point-system", updates);
+    return response.data;
+  },
+};
 
 export default api 
