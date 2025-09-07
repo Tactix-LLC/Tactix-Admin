@@ -24,6 +24,7 @@ import {
 import { formatDateTime } from "@/lib/utils"
 import { gameWeekStatusOptions } from "@/lib/constants"
 import { GameWeek, CreateGameWeekData, UpdateGameWeekDeadlinesData } from "@/types"
+import { AutoJoinMonitor } from "@/components/auto-join-monitor"
 
 export default function GameWeeksPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -488,6 +489,9 @@ export default function GameWeeksPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Auto-Join Monitor */}
+        <AutoJoinMonitor />
 
         {/* Filters and Search */}
         <Card>
