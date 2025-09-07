@@ -86,6 +86,11 @@ export const navigationItems = [
     icon: 'Calendar',
   },
   {
+    title: 'Auto-Join Monitor',
+    href: '/auto-join',
+    icon: 'Activity',
+  },
+  {
     title: 'Competitions',
     href: '/competitions',
     icon: 'Trophy',

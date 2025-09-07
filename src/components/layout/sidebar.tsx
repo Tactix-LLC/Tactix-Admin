@@ -21,6 +21,7 @@ import {
   X,
   LogOut,
   User,
+  Activity,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -35,6 +36,7 @@ const iconMap = {
   FileText,
   BarChart3,
   Settings,
+  Activity,
 }
 
 export function Sidebar() {
