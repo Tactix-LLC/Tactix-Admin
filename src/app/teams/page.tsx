@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query"
 import { teamsAPI } from "@/lib/api"
+import { Team } from "@/types"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -79,7 +80,7 @@ export default function TeamsPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {teams.map((t: any) => (
+                  {teams.map((t: Team) => (
                     <tr key={t._id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -87,14 +88,14 @@ export default function TeamsPage() {
                             <Shield className="h-5 w-5 text-primary-600" />
                           </div>
                           <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">{t.team_name}</div>
-                            <div className="text-xs text-gray-500">Client: {t.client_id?.slice?.(-6) || '-'}</div>
+                            <div className="text-sm font-medium text-gray-900">{t.name}</div>
+                            <div className="text-xs text-gray-500">Client: {t.user_id?.slice?.(-6) || '-'}</div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{t.budget?.toFixed ? t.budget.toFixed(1) : t.budget}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">-</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{t.players?.length ?? 0}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(t.updatedAt).toLocaleDateString()}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(t.updated_at).toLocaleDateString()}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center space-x-2">
                           <Button variant="ghost" size="sm"><Eye className="h-4 w-4" /></Button>

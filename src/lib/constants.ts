@@ -111,6 +111,11 @@ export const navigationItems = [
     icon: 'UserCheck',
   },
   {
+    title: 'Player Points',
+    href: '/player-points',
+    icon: 'BarChart3',
+  },
+  {
     title: 'Fantasy Roasters',
     href: '/fantasy-roasters',
     icon: 'Users',
