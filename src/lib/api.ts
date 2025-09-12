@@ -10,6 +10,7 @@ import {
   Competition, 
   Team, 
   Player, 
+  PlayerStat,
   Transaction, 
   FAQ, 
   Content, 
@@ -620,5 +621,57 @@ export const systemSettingsAPI = {
     return response.data;
   },
 };
+
+// Player Points API for admin
+export const playerPointsAPI = {
+  // Get all player stats with pagination
+  getAll: async (params?: ApiParams): Promise<ApiResponse<PaginatedResponse<PlayerStat>>> => {
+    const response = await api.get('/api/v1/playerstat/admin/all', { params })
+    return response.data
+  },
+
+  // Get player stats by game week
+  getByGameWeek: async (gameWeekId: string, search?: string): Promise<ApiResponse<{ playerStat: PlayerStat[] }>> => {
+    const params = { 
+      ...(search ? { search } : {}),
+      limit: 10000 // Load all players by default
+    }
+    const response = await api.get(`/api/v1/playerstat/admin/gameweek/${gameWeekId}`, { params })
+    return response.data
+  },
+
+  // Update individual player stats
+  updatePlayer: async (gameWeekId: string, playerId: string, updateData: Partial<PlayerStat>): Promise<ApiResponse<{ recalculatedFantasyPoints: number }>> => {
+    const response = await api.put(`/api/v1/playerstat/admin/gameweek/${gameWeekId}/player/${playerId}`, updateData)
+    return response.data
+  },
+
+  // Bulk update player stats
+  bulkUpdate: async (gameWeekId: string, updates: Array<{ pid: string } & Partial<PlayerStat>>): Promise<ApiResponse<{ updatedCount: number }>> => {
+    const response = await api.put(`/api/v1/playerstat/admin/gameweek/${gameWeekId}/bulk`, { updates })
+    return response.data
+  },
+
+  // Generate player stats for a game week
+  generatePlayerStats: async (gameWeekId: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.post(`/api/v1/playerstat/admin/gameweek/${gameWeekId}/generate`)
+    return response.data
+  },
+
+  // Recalculate all points for a game week
+  recalculateGameWeek: async (gameWeekId: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.post(`/api/v1/playerstat/admin/gameweek/${gameWeekId}/recalculate`)
+    return response.data
+  },
+
+  // Recalculate team points for a game week
+  recalculateTeamPoints: async (gameWeekId: string): Promise<ApiResponse<{ updatedTeams: number, totalTeams: number, updates?: Array<{ teamId: string, oldTotal: number, newTotal: number }> }>> => {
+    const response = await api.post(`/api/v1/playerstat/admin/gameweek/${gameWeekId}/recalculate-teams`, {}, {
+      timeout: 120000 // 2 minutes timeout for this operation
+    })
+    return response.data
+  },
+};
+
 
 export default api 

@@ -139,6 +139,36 @@ export interface Player {
   updated_at: string
 }
 
+// Player Statistics Types
+export interface PlayerStat {
+  _id?: string
+  pid: string
+  full_name: string
+  tname: string
+  position: 'Goalkeeper' | 'Defender' | 'Midfielder' | 'Forward'
+  fantasy_point: number
+  minutesplayed: number
+  goalscored: number
+  assist: number
+  passes?: number
+  shotsontarget?: number
+  cleansheet: number
+  shotssaved: number
+  penaltysaved: number
+  tacklesuccessful?: number
+  yellowcard: number
+  redcard: number
+  owngoal: number
+  goalsconceded: number
+  penaltymissed: number
+  chancecreated?: number
+  starting11?: number
+  substitute?: number
+  blockedshot?: number
+  interceptionwon?: number
+  clearance?: number
+}
+
 // Fantasy Roaster Types
 export interface FantasyPlayer {
   pid: string
