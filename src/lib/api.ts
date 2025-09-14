@@ -28,7 +28,19 @@ import {
   UpdatePlayerRatingData,
   UpdateRoasterStatusData,
   AddPlayerData,
-  RemovePlayerData
+  RemovePlayerData,
+  Advertisement,
+  CreateAdvertisementData,
+  AdCompany,
+  CreateAdCompanyData,
+  AdPackage,
+  CreateAdPackageData,
+  AppVersion,
+  CreateAppVersionData,
+  UpdateAppVersionData,
+  UpdateAppVersionSeverityData,
+  Award,
+  CreateAwardData
 } from '@/types'
 
 // Create axios instance
@@ -420,7 +432,7 @@ export const financialAPI = {
 // Content API
 export const contentAPI = {
   // FAQs
-  getFAQs: async (params?: ApiParams): Promise<ApiResponse<PaginatedResponse<FAQ>>> => {
+  getFAQs: async (params?: ApiParams): Promise<ApiResponse<{ faqs: FAQ[] }>> => {
     const response = await api.get('/api/v1/faq', { params })
     return response.data
   },
@@ -441,35 +453,74 @@ export const contentAPI = {
   },
   
   // Terms
-  getTerms: async (): Promise<ApiResponse<Content>> => {
+  getTerms: async (): Promise<ApiResponse<{ termsAndConditions: Content[] }>> => {
     const response = await api.get('/api/v1/terms')
     return response.data
   },
   
   updateTerms: async (data: Partial<Content>): Promise<ApiResponse<Content>> => {
-    const response = await api.put('/api/v1/terms', data)
+    // First try to get existing terms
+    try {
+      const existing = await api.get('/api/v1/terms')
+      if (existing.data?.data?.termsAndConditions?.length > 0) {
+        // Update existing
+        const id = existing.data.data.termsAndConditions[0]._id
+        const response = await api.patch(`/api/v1/terms/${id}`, data)
+        return response.data
+      }
+    } catch (error) {
+      // If no existing terms, create new
+    }
+    // Create new terms
+    const response = await api.post('/api/v1/terms', data)
     return response.data
   },
   
   // Privacy
-  getPrivacy: async (): Promise<ApiResponse<Content>> => {
+  getPrivacy: async (): Promise<ApiResponse<{ privacy: Content[] }>> => {
     const response = await api.get('/api/v1/privacy')
     return response.data
   },
   
   updatePrivacy: async (data: Partial<Content>): Promise<ApiResponse<Content>> => {
-    const response = await api.put('/api/v1/privacy', data)
+    // First try to get existing privacy
+    try {
+      const existing = await api.get('/api/v1/privacy')
+      if (existing.data?.data?.privacy?.length > 0) {
+        // Update existing
+        const id = existing.data.data.privacy[0]._id
+        const response = await api.patch(`/api/v1/privacy/${id}`, data)
+        return response.data
+      }
+    } catch (error) {
+      // If no existing privacy, create new
+    }
+    // Create new privacy
+    const response = await api.post('/api/v1/privacy', data)
     return response.data
   },
   
   // About
-  getAbout: async (): Promise<ApiResponse<Content>> => {
+  getAbout: async (): Promise<ApiResponse<{ aboutUs: Content[] }>> => {
     const response = await api.get('/api/v1/aboutus')
     return response.data
   },
   
   updateAbout: async (data: Partial<Content>): Promise<ApiResponse<Content>> => {
-    const response = await api.put('/api/v1/aboutus', data)
+    // First try to get existing about
+    try {
+      const existing = await api.get('/api/v1/aboutus')
+      if (existing.data?.data?.aboutUs?.length > 0) {
+        // Update existing
+        const id = existing.data.data.aboutUs[0]._id
+        const response = await api.patch(`/api/v1/aboutus/${id}`, data)
+        return response.data
+      }
+    } catch (error) {
+      // If no existing about, create new
+    }
+    // Create new about
+    const response = await api.post('/api/v1/aboutus', data)
     return response.data
   },
 }
@@ -673,5 +724,261 @@ export const playerPointsAPI = {
   },
 };
 
+
+// Advertisement API
+export const advertisementAPI = {
+  // Get all advertisements
+  getAll: async (params?: ApiParams): Promise<ApiResponse<PaginatedResponse<Advertisement>>> => {
+    const response = await api.get('/api/v1/advertisement', { params })
+    return response.data
+  },
+
+  // Get advertisement by ID
+  getById: async (id: string): Promise<ApiResponse<Advertisement>> => {
+    const response = await api.get(`/api/v1/advertisement/${id}`)
+    return response.data
+  },
+
+  // Create new advertisement
+  create: async (data: CreateAdvertisementData): Promise<ApiResponse<Advertisement>> => {
+    const response = await api.post('/api/v1/advertisement', data)
+    return response.data
+  },
+
+  // Update advertisement basic info (company, package, link)
+  update: async (id: string, data: { ad_company?: string; ad_package?: string; link?: string }): Promise<ApiResponse<Advertisement>> => {
+    const response = await api.patch(`/api/v1/advertisement/${id}`, data)
+    return response.data
+  },
+
+  // Update advertisement status
+  updateStatus: async (id: string, is_active: boolean): Promise<ApiResponse<Advertisement>> => {
+    const response = await api.patch(`/api/v1/advertisement/updatestatus/${id}`, { is_active })
+    return response.data
+  },
+
+  // Update advertisement calendar (start_date, end_date)
+  updateCalendar: async (id: string, data: { start_date: string; end_date: string }): Promise<ApiResponse<Advertisement>> => {
+    const response = await api.patch(`/api/v1/advertisement/updatecalendar/${id}`, data)
+    return response.data
+  },
+
+  // Delete advertisement
+  delete: async (id: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.delete(`/api/v1/advertisement/${id}`)
+    return response.data
+  },
+
+  // Delete all advertisements
+  deleteAll: async (deleteKey: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.delete('/api/v1/advertisement', { data: { delete_key: deleteKey } })
+    return response.data
+  },
+
+  // Get active advertisements
+  getActive: async (): Promise<ApiResponse<Advertisement[]>> => {
+    const response = await api.get('/api/v1/advertisement/active')
+    return response.data
+  }
+};
+
+
+// Awards API (Winners)
+export const awardsAPI = {
+  // Get client awards
+  getClientAwards: async (clientId: string): Promise<ApiResponse<{ clientAwards: Award[] }>> => {
+    const response = await api.get(`/api/v1/winners/clientawards/${clientId}`)
+    return response.data
+  },
+
+  // Get all winners/awards
+  getAll: async (params?: ApiParams): Promise<ApiResponse<PaginatedResponse<Award>>> => {
+    const response = await api.get('/api/v1/winners', { params })
+    return response.data
+  },
+
+  // Create new award/winner
+  create: async (data: CreateAwardData): Promise<ApiResponse<Award>> => {
+    const response = await api.post('/api/v1/winners', data)
+    return response.data
+  },
+
+  // Update award/winner
+  update: async (id: string, data: Partial<CreateAwardData>): Promise<ApiResponse<Award>> => {
+    const response = await api.put(`/api/v1/winners/${id}`, data)
+    return response.data
+  },
+
+  // Delete award/winner
+  delete: async (id: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.delete(`/api/v1/winners/${id}`)
+    return response.data
+  }
+};
+
+// AD Company API
+export const adCompanyAPI = {
+  // Get all ad companies
+  getAll: async (params?: ApiParams): Promise<ApiResponse<{ adCompanies: AdCompany[] }>> => {
+    const response = await api.get('/api/v1/adcompany', { params })
+    return response.data
+  },
+
+  // Get company by ID
+  getById: async (id: string): Promise<ApiResponse<AdCompany>> => {
+    const response = await api.get(`/api/v1/adcompany/${id}`)
+    return response.data
+  },
+
+  // Create new company
+  create: async (data: CreateAdCompanyData): Promise<ApiResponse<AdCompany>> => {
+    const response = await api.post('/api/v1/adcompany', data)
+    return response.data
+  },
+
+  // Update company
+  update: async (id: string, data: Partial<CreateAdCompanyData>): Promise<ApiResponse<AdCompany>> => {
+    const response = await api.patch(`/api/v1/adcompany/${id}`, data)
+    return response.data
+  },
+
+  // Delete company
+  delete: async (id: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.delete(`/api/v1/adcompany/${id}`)
+    return response.data
+  },
+
+  // Delete all companies
+  deleteAll: async (deleteKey: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.delete('/api/v1/adcompany', { data: { delete_key: deleteKey } })
+    return response.data
+  }
+};
+
+// AD Package API
+export const adPackageAPI = {
+  // Get all ad packages
+  getAll: async (params?: ApiParams): Promise<ApiResponse<PaginatedResponse<AdPackage>>> => {
+    const response = await api.get('/api/v1/adpackages', { params })
+    return response.data
+  },
+
+  // Get active packages only
+  getActive: async (): Promise<ApiResponse<AdPackage[]>> => {
+    const response = await api.get('/api/v1/adpackages/active')
+    return response.data
+  },
+
+  // Get package by ID
+  getById: async (id: string): Promise<ApiResponse<AdPackage>> => {
+    const response = await api.get(`/api/v1/adpackages/${id}`)
+    return response.data
+  },
+
+  // Create new package
+  create: async (data: CreateAdPackageData): Promise<ApiResponse<AdPackage>> => {
+    const response = await api.post('/api/v1/adpackages', data)
+    return response.data
+  },
+
+  // Update package
+  update: async (id: string, data: Partial<CreateAdPackageData>): Promise<ApiResponse<AdPackage>> => {
+    const response = await api.patch(`/api/v1/adpackages/${id}`, data)
+    return response.data
+  },
+
+  // Update package status
+  updateStatus: async (id: string, status: 'Active' | 'Inactive'): Promise<ApiResponse<AdPackage>> => {
+    const response = await api.patch(`/api/v1/adpackages/status/${id}`, { status })
+    return response.data
+  },
+
+  // Delete package
+  delete: async (id: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.delete(`/api/v1/adpackages/${id}`)
+    return response.data
+  },
+
+  // Delete all packages
+  deleteAll: async (deleteKey: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.delete('/api/v1/adpackages', { data: { delete_key: deleteKey } })
+    return response.data
+  }
+};
+
+// App Version API
+export const appVersionAPI = {
+  // Get all app versions
+  getAll: async (params?: ApiParams): Promise<ApiResponse<{ appVersions: AppVersion[] }>> => {
+    console.log('🔍 [API] Calling getAll without query params')
+    const response = await api.get('/api/v1/appversion')
+    console.log('🔍 [API] Raw response:', response.data)
+    
+    // Handle the actual API response structure
+    const rawData = response.data
+    let appVersions: AppVersion[] = []
+    
+    if (rawData?.data?.appVersions) {
+      appVersions = rawData.data.appVersions
+    } else if (Array.isArray(rawData?.data)) {
+      appVersions = rawData.data
+    } else if (Array.isArray(rawData)) {
+      appVersions = rawData
+    }
+    
+    console.log('🔍 [API] Extracted appVersions:', appVersions)
+    
+    const normalizedData = {
+      ...rawData,
+      data: {
+        appVersions
+      }
+    }
+    console.log('🔍 [API] Normalized data:', normalizedData)
+    return normalizedData
+  },
+
+  // Get latest version by OS
+  getLatest: async (os: 'Android' | 'iOS'): Promise<ApiResponse<{ latestVersion: AppVersion }>> => {
+    const response = await api.get(`/api/v1/appversion/latest?os=${os}`)
+    return response.data
+  },
+
+  // Get version by ID
+  getById: async (id: string): Promise<ApiResponse<{ appVersion: AppVersion }>> => {
+    const response = await api.get(`/api/v1/appversion/${id}`)
+    return response.data
+  },
+
+  // Create new app version
+  create: async (data: CreateAppVersionData): Promise<ApiResponse<{ appVersion: AppVersion }>> => {
+    const response = await api.post('/api/v1/appversion', data)
+    return response.data
+  },
+
+  // Update app version
+  update: async (id: string, data: UpdateAppVersionData): Promise<ApiResponse<{ appVersion: AppVersion }>> => {
+    const response = await api.patch(`/api/v1/appversion/${id}`, data)
+    return response.data
+  },
+
+  // Update app version severity
+  updateSeverity: async (id: string, data: UpdateAppVersionSeverityData): Promise<ApiResponse<{ appVersion: AppVersion }>> => {
+    const response = await api.patch(`/api/v1/appversion/severity/${id}`, data)
+    return response.data
+  },
+
+  // Delete app version
+  delete: async (id: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.delete(`/api/v1/appversion/${id}`)
+    return response.data
+  },
+
+  // Delete all app versions
+  deleteAll: async (deleteKey: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.delete('/api/v1/appversion', { data: { delete_key: deleteKey } })
+    return response.data
+  }
+};
 
 export default api 

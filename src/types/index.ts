@@ -243,8 +243,8 @@ export interface Transaction {
 // FAQ Types
 export interface FAQ {
   _id: string
-  question: string
-  answer: string
+  title: string
+  content: string
   category?: string
   order?: number
   created_at: string
@@ -257,6 +257,10 @@ export interface Content {
   title: string
   content: string
   type: 'terms' | 'privacy' | 'about'
+  is_published?: boolean
+  is_message?: boolean
+  version_title?: string
+  version_content?: string
   created_at: string
   updated_at: string
 }
@@ -324,6 +328,137 @@ export interface ApiParams {
   status?: string
   sort?: string
   order?: 'asc' | 'desc'
+}
+
+// Advertisement Types
+export interface Advertisement {
+  _id: string
+  ad_company: string
+  ad_package: string
+  start_date: string
+  end_date: string
+  link?: string
+  is_active: boolean
+  img: {
+    cloudinary_secure_url: string
+    cloudinary_public_id: string
+  }
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateAdvertisementData {
+  ad_company: string
+  ad_package: string
+  start_date: string
+  link?: string
+  is_active?: boolean
+  img: {
+    cloudinary_secure_url: string
+    cloudinary_public_id: string
+  }
+}
+
+// AD Company Types
+export interface AdCompany {
+  _id: string
+  comp_name: string
+  comp_name_slug: string
+  comp_tin: string
+  comp_addr: string
+  comp_contact: {
+    phone_number: string[]
+    email: string
+  }
+  business_type: string
+  website?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateAdCompanyData {
+  comp_name: string
+  comp_tin: string
+  comp_addr: string
+  comp_contact: {
+    phone_number: string[]
+    email: string
+  }
+  business_type: string
+  website?: string
+}
+
+// AD Package Types
+export interface AdPackage {
+  _id: string
+  pack_name: string
+  pack_name_slug: string
+  price: number
+  duration: number
+  status: 'Active' | 'Inactive'
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateAdPackageData {
+  pack_name: string
+  price: number
+  duration: number
+}
+
+// App Version Types
+export interface AppVersion {
+  _id: string
+  latest_version: string
+  os: 'Android' | 'iOS'
+  url: string
+  highly_severe: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateAppVersionData {
+  latest_version: string
+  os: 'Android' | 'iOS'
+  url: string
+  highly_severe: boolean
+}
+
+export interface UpdateAppVersionData {
+  latest_version?: string
+  url?: string
+}
+
+export interface UpdateAppVersionSeverityData {
+  highly_severe: boolean
+}
+
+// Award Types
+export interface Award {
+  _id: string
+  client_id: string
+  client_name?: string
+  competition_id: string
+  competition_name: string
+  game_week: number
+  position: number
+  total_point: number
+  award_type: 'first' | 'second' | 'third' | 'winner' | 'participant'
+  prize_amount?: number
+  prize_description?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateAwardData {
+  client_id: string
+  competition_id: string
+  game_week: number
+  position: number
+  total_point: number
+  award_type: 'first' | 'second' | 'third' | 'winner' | 'participant'
+  prize_amount?: number
+  prize_description?: string
 }
 
 // Generic Types

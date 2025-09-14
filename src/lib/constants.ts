@@ -121,14 +121,19 @@ export const navigationItems = [
     icon: 'Users',
   },
   {
-    title: 'System Settings',
-    href: '/system-settings',
-    icon: 'Settings',
+    title: 'Advertisements',
+    href: '/advertisements',
+    icon: 'Monitor',
   },
   {
-    title: 'Financial',
-    href: '/financial',
-    icon: 'DollarSign',
+    title: 'App Version',
+    href: '/app-version',
+    icon: 'Smartphone',
+  },
+  {
+    title: 'Awards',
+    href: '/awards',
+    icon: 'Award',
   },
   {
     title: 'Content',
@@ -136,13 +141,8 @@ export const navigationItems = [
     icon: 'FileText',
   },
   {
-    title: 'Analytics',
-    href: '/analytics',
-    icon: 'BarChart3',
-  },
-  {
-    title: 'Settings',
-    href: '/settings',
+    title: 'System Settings',
+    href: '/system-settings',
     icon: 'Settings',
   },
 ]

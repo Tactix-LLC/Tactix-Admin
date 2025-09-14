@@ -13,7 +13,6 @@ import {
   Trophy,
   Shield,
   UserCheck,
-  DollarSign,
   FileText,
   BarChart3,
   Settings,
@@ -22,6 +21,9 @@ import {
   LogOut,
   User,
   Activity,
+  Monitor,
+  Smartphone,
+  Award,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -32,11 +34,13 @@ const iconMap = {
   Trophy,
   Shield,
   UserCheck,
-  DollarSign,
   FileText,
   BarChart3,
   Settings,
   Activity,
+  Monitor,
+  Smartphone,
+  Award,
 }
 
 export function Sidebar() {
