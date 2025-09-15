@@ -40,7 +40,12 @@ import {
   UpdateAppVersionData,
   UpdateAppVersionSeverityData,
   Award,
-  CreateAwardData
+  CreateAwardData,
+  Poll,
+  CreatePollData,
+  UpdatePollData,
+  UpdatePollStatusData,
+  PollResponse
 } from '@/types'
 
 // Create axios instance
@@ -977,6 +982,69 @@ export const appVersionAPI = {
   // Delete all app versions
   deleteAll: async (deleteKey: string): Promise<ApiResponse<{ message: string }>> => {
     const response = await api.delete('/api/v1/appversion', { data: { delete_key: deleteKey } })
+    return response.data
+  }
+};
+
+// Poll API
+export const pollAPI = {
+  // Get all polls
+  getAll: async (params?: ApiParams): Promise<ApiResponse<{ polls: Poll[] }>> => {
+    const response = await api.get('/api/v1/poll', { params })
+    return response.data
+  },
+
+  // Get poll by ID
+  getById: async (id: string): Promise<ApiResponse<{ pol: Poll }>> => {
+    const response = await api.get(`/api/v1/poll/${id}`)
+    return response.data
+  },
+
+  // Create new poll
+  create: async (data: CreatePollData): Promise<ApiResponse<{ pol: Poll }>> => {
+    const response = await api.post('/api/v1/poll', data)
+    return response.data
+  },
+
+  // Update poll info (question, close_date)
+  update: async (id: string, data: UpdatePollData): Promise<ApiResponse<{ poll: Poll }>> => {
+    const response = await api.patch(`/api/v1/poll/${id}`, data)
+    return response.data
+  },
+
+  // Update poll status (Open/Closed)
+  updateStatus: async (id: string, data: UpdatePollStatusData): Promise<ApiResponse<{ poll: Poll }>> => {
+    const response = await api.patch(`/api/v1/poll/status/${id}`, data)
+    return response.data
+  },
+
+  // Delete poll by ID
+  delete: async (id: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.delete(`/api/v1/poll/${id}`)
+    return response.data
+  },
+
+  // Delete all polls
+  deleteAll: async (deleteKey: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.delete('/api/v1/poll', { data: { delete_key: deleteKey } })
+    return response.data
+  },
+
+  // Get all poll responses
+  getAllResponses: async (): Promise<ApiResponse<{ pollResponses: PollResponse[] }>> => {
+    const response = await api.get('/api/v1/poll/pollresponse')
+    return response.data
+  },
+
+  // Get client's poll responses
+  getClientResponses: async (clientId: string, pollId: string): Promise<ApiResponse<{ polResponse: PollResponse[] }>> => {
+    const response = await api.get(`/api/v1/poll/pollresponse/${clientId}/${pollId}`)
+    return response.data
+  },
+
+  // Get user polls (polls a user has responded to)
+  getUserPolls: async (userId: string): Promise<ApiResponse<{ polls: PollResponse[] }>> => {
+    const response = await api.get(`/api/v1/poll/userpolls/${userId}`)
     return response.data
   }
 };

@@ -136,6 +136,11 @@ export const navigationItems = [
     icon: 'Award',
   },
   {
+    title: 'Polls',
+    href: '/polls',
+    icon: 'MessageSquare',
+  },
+  {
     title: 'Content',
     href: '/content',
     icon: 'FileText',
