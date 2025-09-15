@@ -24,6 +24,7 @@ import {
   Monitor,
   Smartphone,
   Award,
+  MessageSquare,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -41,6 +42,7 @@ const iconMap = {
   Monitor,
   Smartphone,
   Award,
+  MessageSquare,
 }
 
 export function Sidebar() {

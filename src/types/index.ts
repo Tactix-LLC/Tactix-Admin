@@ -461,6 +461,52 @@ export interface CreateAwardData {
   prize_description?: string
 }
 
+// Poll interfaces
+export interface PollChoice {
+  _id: string
+  choice: string
+  selected_by: number
+  id: string
+}
+
+export interface Poll {
+  _id: string
+  question: string
+  choices: PollChoice[]
+  status: 'Open' | 'Closed'
+  close_date: string
+  createdAt: string
+  updatedAt: string
+  __v: number
+  id: string
+}
+
+export interface CreatePollData {
+  question: string
+  choices: Array<{ choice: string }>
+  close_date: string
+}
+
+export interface UpdatePollData {
+  question?: string
+  close_date?: string
+}
+
+export interface UpdatePollStatusData {
+  status: 'Open' | 'Closed'
+}
+
+export interface PollResponse {
+  _id: string
+  poll_id: string
+  user_id: string
+  choice_id: string
+  createdAt: string
+  updatedAt: string
+  __v: number
+  id: string
+}
+
 // Generic Types
 export type ApiFunction<T = unknown> = (params?: ApiParams) => Promise<ApiResponse<T>>
 export type MutationFunction<T = unknown, R = unknown> = (data: T) => Promise<ApiResponse<R>> 
