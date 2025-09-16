@@ -1,14 +1,16 @@
-'use client'
+"use client"
 
-import React, { useState, useEffect } from 'react'
-import { Card } from '@/components/ui/card'
+import React, { useState, useEffect, useMemo } from 'react'
+import { MainLayout } from "@/components/layout/main-layout"
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import { useUIStore } from '@/lib/store'
 import { fantasyRoasterAPI } from '@/lib/api'
 import { 
   FantasyRoaster, 
-  FantasyPlayer, 
   CreateFantasyRoasterData,
   UpdatePlayerRatingData,
   UpdateRoasterStatusData,
@@ -23,7 +25,16 @@ import {
   Check,
   X,
   RefreshCw,
-  Users
+  Users,
+  Search,
+  Activity,
+  TrendingUp,
+  Shield,
+  Star,
+  AlertTriangle,
+  Calendar,
+  User,
+  Trophy
 } from 'lucide-react'
 
 export default function FantasyRoastersPage() {
@@ -37,6 +48,7 @@ export default function FantasyRoastersPage() {
   const [showPlayers, setShowPlayers] = useState(false)
   const [newSeasonName, setNewSeasonName] = useState('')
   const [editingPlayer, setEditingPlayer] = useState<{ pid: string; rating: string } | null>(null)
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [newPlayer, setNewPlayer] = useState<AddPlayerData>({
     pid: '',
     pname: '',
@@ -51,14 +63,14 @@ export default function FantasyRoastersPage() {
 
   useEffect(() => {
     fetchRoasters()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchRoasters = async () => {
     try {
       const response = await fantasyRoasterAPI.getFantasyRoasters()
       const list = Array.isArray(response.data) ? response.data : []
       setRoasters(list)
-    } catch (error) {
+    } catch {
       addNotification({ id: Date.now().toString(), type: 'error', title: 'Error', message: 'Failed to fetch roasters' })
     } finally {
       setLoading(false)
@@ -84,7 +96,7 @@ export default function FantasyRoastersPage() {
         setIsCreating(false)
         fetchRoasters()
       }
-    } catch (error) {
+    } catch {
       addNotification({ id: Date.now().toString(), type: 'error', title: 'Error', message: 'Failed to create roaster' })
     } finally {
       setLoading(false)
@@ -99,7 +111,7 @@ export default function FantasyRoastersPage() {
         addNotification({ id: Date.now().toString(), type: 'success', title: 'Success', message: 'Players populated successfully' })
         fetchRoasters()
       }
-    } catch (error) {
+    } catch {
       addNotification({ id: Date.now().toString(), type: 'error', title: 'Error', message: 'Failed to populate players' })
     } finally {
       setLoading(false)
@@ -121,7 +133,7 @@ export default function FantasyRoastersPage() {
         })
         fetchRoasters()
       }
-    } catch (error) {
+    } catch {
       addNotification({ id: Date.now().toString(), type: 'error', title: 'Error', message: 'Failed to update roaster status' })
     }
   }
@@ -138,7 +150,7 @@ export default function FantasyRoastersPage() {
         setEditingPlayer(null)
         fetchRoasters()
       }
-    } catch (error) {
+    } catch {
       addNotification({ id: Date.now().toString(), type: 'error', title: 'Error', message: 'Failed to update player rating' })
     }
   }
@@ -166,7 +178,7 @@ export default function FantasyRoastersPage() {
         })
         fetchRoasters()
       }
-    } catch (error) {
+    } catch {
       addNotification({ id: Date.now().toString(), type: 'error', title: 'Error', message: 'Failed to add player' })
     }
   }
@@ -179,7 +191,7 @@ export default function FantasyRoastersPage() {
         addNotification({ id: Date.now().toString(), type: 'success', title: 'Success', message: 'Player removed successfully' })
         fetchRoasters()
       }
-    } catch (error) {
+    } catch {
       addNotification({ id: Date.now().toString(), type: 'error', title: 'Error', message: 'Failed to remove player' })
     }
   }
@@ -193,371 +205,593 @@ export default function FantasyRoastersPage() {
         addNotification({ id: Date.now().toString(), type: 'success', title: 'Success', message: 'Roaster deleted successfully' })
         fetchRoasters()
       }
-    } catch (error) {
+    } catch {
       addNotification({ id: Date.now().toString(), type: 'error', title: 'Error', message: 'Failed to delete roaster' })
     }
   }
 
-  const filteredRoasters = (Array.isArray(roasters) ? roasters : []).filter((roaster) =>
-    (roaster?.season_name || '').toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  // Computed values
+  const stats = useMemo(() => {
+    const totalRoasters = roasters.length
+    const activeRoasters = roasters.filter(r => r.is_active).length
+    const totalPlayers = roasters.reduce((sum, r) => sum + (r.players?.length || 0), 0)
+    const avgPlayersPerRoaster = totalRoasters > 0 ? Math.round(totalPlayers / totalRoasters) : 0
+    
+    return {
+      totalRoasters,
+      activeRoasters,
+      inactiveRoasters: totalRoasters - activeRoasters,
+      totalPlayers,
+      avgPlayersPerRoaster
+    }
+  }, [roasters])
+
+  const filteredRoasters = useMemo(() => {
+    return (Array.isArray(roasters) ? roasters : []).filter((roaster) => {
+      const matchesSearch = (roaster?.season_name || '').toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesStatus = statusFilter === 'all' || 
+        (statusFilter === 'active' && roaster.is_active) ||
+        (statusFilter === 'inactive' && !roaster.is_active)
+      
+      return matchesSearch && matchesStatus
+    })
+  }, [roasters, searchTerm, statusFilter])
+
 
   if (loading && roasters.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <RefreshCw className="h-8 w-8 animate-spin text-blue-600" />
-        <span className="ml-2">Loading roasters...</span>
-      </div>
+      <MainLayout>
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
+          <span className="ml-2">Loading roasters...</span>
+        </div>
+      </MainLayout>
     )
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold text-gray-900">Fantasy Roasters</h1>
-        <div className="flex gap-3">
-          <Button 
-            onClick={handlePopulatePlayers}
-            disabled={loading}
-            className="bg-green-600 hover:bg-green-700"
-          >
-            <Users className="h-4 w-4 mr-2" />
-            Populate Players
-          </Button>
-          <Button 
-            onClick={() => setIsCreating(true)}
-            disabled={loading}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Create Roaster
-          </Button>
-        </div>
-      </div>
-
-      {/* Search */}
-      <div className="flex gap-4">
-        <Input
-          placeholder="Search roasters..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-md"
-        />
-      </div>
-
-      {/* Create New Roaster Modal */}
-      {isCreating && (
-        <Card className="p-6 bg-blue-50 border-blue-200">
-          <h3 className="text-lg font-semibold mb-4">Create New Fantasy Roaster</h3>
-          <div className="flex gap-4 items-end">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Season Name
-              </label>
-              <Input
-                value={newSeasonName}
-                onChange={(e) => setNewSeasonName(e.target.value)}
-                placeholder="Enter season name..."
-              />
-            </div>
-            <Button onClick={handleCreateRoaster} disabled={loading}>
-              <Check className="h-4 w-4 mr-2" />
-              Create
+    <MainLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Fantasy Roaster Management</h1>
+            <p className="text-gray-600">Manage fantasy football rosters, players, and season data</p>
+          </div>
+          <div className="flex gap-3">
+            <Button 
+              onClick={handlePopulatePlayers}
+              disabled={loading}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <Users className="h-4 w-4" />
+              Populate Players
             </Button>
             <Button 
-              variant="outline" 
-              onClick={() => {
-                setIsCreating(false)
-                setNewSeasonName('')
-              }}
+              onClick={() => setIsCreating(true)}
+              disabled={loading}
+              className="flex items-center gap-2"
             >
-              <X className="h-4 w-4 mr-2" />
-              Cancel
+              <Plus className="h-4 w-4" />
+              Create Roaster
             </Button>
           </div>
-        </Card>
-      )}
+        </div>
 
-      {/* Roasters List */}
-      <div className="grid gap-4">
-        {filteredRoasters.map((roaster) => (
-          <Card key={roaster._id} className="p-6">
-            <div className="flex justify-between items-start">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className="text-xl font-semibold">{roaster.season_name}</h3>
-                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                    roaster.is_active 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {roaster.is_active ? 'Active' : 'Inactive'}
-                  </span>
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Trophy className="h-6 w-6 text-blue-600" />
                 </div>
-                
-                <div className="text-sm text-gray-600 space-y-1">
-                  <p>Players: {roaster.players?.length ?? 0}</p>
-                  <p>Created: {new Date(roaster.createdAt).toLocaleDateString()}</p>
-                  <p>Updated: {new Date(roaster.updatedAt).toLocaleDateString()}</p>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Total Roasters</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.totalRoasters}</p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
 
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setSelectedRoaster(roaster)
-                    setShowPlayers(!showPlayers || selectedRoaster?._id !== roaster._id)
-                  }}
-                >
-                  <Eye className="h-4 w-4 mr-1" />
-                  {showPlayers && selectedRoaster?._id === roaster._id ? 'Hide' : 'View'} Players
-                </Button>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleToggleStatus(roaster)}
-                  className={roaster.is_active ? 'text-red-600' : 'text-green-600'}
-                >
-                  {roaster.is_active ? 'Deactivate' : 'Activate'}
-                </Button>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <div className="p-2 bg-green-100 rounded-lg">
+                  <Activity className="h-6 w-6 text-green-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Active</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.activeRoasters}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleDeleteRoaster(roaster._id)}
-                  className="text-red-600 hover:text-red-700"
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <div className="p-2 bg-gray-100 rounded-lg">
+                  <Shield className="h-6 w-6 text-gray-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Inactive</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.inactiveRoasters}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <Users className="h-6 w-6 text-purple-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Total Players</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.totalPlayers}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center">
+                <div className="p-2 bg-orange-100 rounded-lg">
+                  <TrendingUp className="h-6 w-6 text-orange-600" />
+                </div>
+                <div className="ml-4">
+                  <p className="text-sm font-medium text-gray-600">Avg Players</p>
+                  <p className="text-2xl font-bold text-gray-900">{stats.avgPlayersPerRoaster}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Search and Filters */}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Search roasters by season name..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <div className="flex gap-3">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <option value="all">All Status</option>
+                  <option value="active">Active Only</option>
+                  <option value="inactive">Inactive Only</option>
+                </select>
+                <Button
+                  onClick={() => fetchRoasters()}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Refresh
                 </Button>
               </div>
             </div>
+          </CardContent>
+        </Card>
 
-            {/* Players Section */}
-            {showPlayers && selectedRoaster?._id === roaster._id && (
-              <div className="mt-6 border-t pt-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h4 className="text-lg font-medium">Players ({roaster.players?.length ?? 0})</h4>
-                  <Button 
-                    size="sm" 
-                    onClick={() => setIsEditing(!isEditing)}
-                    variant="outline"
+        {/* Create New Roaster Modal */}
+        {isCreating && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold">Create Fantasy Roaster</h2>
+                <Button
+                  onClick={() => {
+                    setIsCreating(false)
+                    setNewSeasonName('')
+                  }}
+                  variant="outline"
+                  size="sm"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="season_name">Season Name *</Label>
+                  <Input
+                    id="season_name"
+                    value={newSeasonName}
+                    onChange={(e) => setNewSeasonName(e.target.value)}
+                    placeholder="e.g., 2023-24 Premier League"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-2 mt-6">
+                <Button
+                  onClick={() => {
+                    setIsCreating(false)
+                    setNewSeasonName('')
+                  }}
+                  variant="outline"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleCreateRoaster}
+                  disabled={loading || !newSeasonName.trim()}
+                >
+                  {loading ? 'Creating...' : 'Create Roaster'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Roasters Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {filteredRoasters.map((roaster) => (
+            <Card key={roaster._id} className="overflow-hidden hover:shadow-lg transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <Trophy className="h-5 w-5 text-blue-600" />
+                      <CardTitle className="text-lg">{roaster.season_name}</CardTitle>
+                    </div>
+                    <Badge 
+                      variant={roaster.is_active ? "default" : "secondary"}
+                      className={roaster.is_active ? "bg-green-100 text-green-800" : ""}
+                    >
+                      {roaster.is_active ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDeleteRoaster(roaster._id)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
                   >
-                    <Edit className="h-4 w-4 mr-1" />
-                    {isEditing ? 'Done Editing' : 'Edit Players'}
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
+              </CardHeader>
+              
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600">{roaster.players?.length ?? 0}</div>
+                    <div className="text-xs text-gray-500">Players</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">
+                      {roaster.players?.filter(p => p.is_new).length ?? 0}
+                    </div>
+                    <div className="text-xs text-gray-500">New</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-red-600">
+                      {roaster.players?.filter(p => p.is_injuried || p.is_banned).length ?? 0}
+                    </div>
+                    <div className="text-xs text-gray-500">Issues</div>
+                  </div>
+                </div>
 
-                {/* Add New Player */}
-                {isEditing && (
-                  <Card className="p-4 mb-4 bg-gray-50">
-                    <h5 className="font-medium mb-3">Add New Player</h5>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      <Input
-                        placeholder="Player ID"
-                        value={newPlayer.pid}
-                        onChange={(e) => setNewPlayer({...newPlayer, pid: e.target.value})}
-                      />
-                      <Input
-                        placeholder="Player Name"
-                        value={newPlayer.pname}
-                        onChange={(e) => setNewPlayer({...newPlayer, pname: e.target.value})}
-                      />
-                      <Input
-                        placeholder="Position"
-                        value={newPlayer.role}
-                        onChange={(e) => setNewPlayer({...newPlayer, role: e.target.value})}
-                      />
-                      <Input
-                        placeholder="Rating"
-                        type="number"
-                        value={newPlayer.rating || ''}
-                        onChange={(e) => setNewPlayer({...newPlayer, rating: parseFloat(e.target.value) || 0})}
-                      />
-                      <Input
-                        placeholder="Team ID"
-                        value={newPlayer.tid}
-                        onChange={(e) => setNewPlayer({...newPlayer, tid: e.target.value})}
-                      />
-                      <Input
-                        placeholder="Team Name"
-                        value={newPlayer.tname}
-                        onChange={(e) => setNewPlayer({...newPlayer, tname: e.target.value})}
-                      />
-                      <Input
-                        placeholder="Team Abbr"
-                        value={newPlayer.abbr}
-                        onChange={(e) => setNewPlayer({...newPlayer, abbr: e.target.value})}
-                      />
+                <div className="flex items-center justify-between text-sm text-gray-600 mb-4">
+                  <div className="flex items-center gap-1">
+                    <Calendar className="h-4 w-4" />
+                    <span>Created {new Date(roaster.createdAt).toLocaleDateString()}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <User className="h-4 w-4" />
+                    <span>Updated {new Date(roaster.updatedAt).toLocaleDateString()}</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedRoaster(roaster)
+                      setShowPlayers(!showPlayers || selectedRoaster?._id !== roaster._id)
+                    }}
+                    className="flex-1"
+                  >
+                    <Eye className="h-4 w-4 mr-1" />
+                    {showPlayers && selectedRoaster?._id === roaster._id ? 'Hide' : 'View'} Players
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleToggleStatus(roaster)}
+                    className={`${roaster.is_active ? 'text-red-600 hover:bg-red-50' : 'text-green-600 hover:bg-green-50'}`}
+                  >
+                    {roaster.is_active ? 'Deactivate' : 'Activate'}
+                  </Button>
+                </div>
+              </CardContent>
+
+              {/* Players Section */}
+              {showPlayers && selectedRoaster?._id === roaster._id && (
+                <div className="border-t bg-gray-50">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between items-center mb-6">
+                      <div>
+                        <h4 className="text-lg font-semibold">Squad Players</h4>
+                        <p className="text-sm text-gray-600">{roaster.players?.length ?? 0} players in roster</p>
+                      </div>
                       <Button 
-                        onClick={() => handleAddPlayer(roaster._id)}
-                        className="bg-green-600 hover:bg-green-700"
+                        size="sm" 
+                        onClick={() => setIsEditing(!isEditing)}
+                        variant="outline"
+                        className="flex items-center gap-2"
                       >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add
+                        <Edit className="h-4 w-4" />
+                        {isEditing ? 'Done Editing' : 'Edit Players'}
                       </Button>
                     </div>
-                  </Card>
-                )}
 
-                {/* Players Table */}
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Player
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Position
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Team
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Rating
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Status
-                        </th>
-                        {isEditing && (
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Actions
-                          </th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    {/* Add New Player */}
+                    {isEditing && (
+                      <Card className="p-4 mb-6 bg-white border-2 border-dashed border-gray-300">
+                        <h5 className="font-semibold mb-4 flex items-center gap-2">
+                          <Plus className="h-4 w-4" />
+                          Add New Player
+                        </h5>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="player_id">Player ID *</Label>
+                            <Input
+                              id="player_id"
+                              placeholder="Enter player ID"
+                              value={newPlayer.pid}
+                              onChange={(e) => setNewPlayer({...newPlayer, pid: e.target.value})}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="player_name">Player Name *</Label>
+                            <Input
+                              id="player_name"
+                              placeholder="Enter player name"
+                              value={newPlayer.pname}
+                              onChange={(e) => setNewPlayer({...newPlayer, pname: e.target.value})}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="position">Position *</Label>
+                            <select
+                              id="position"
+                              value={newPlayer.role}
+                              onChange={(e) => setNewPlayer({...newPlayer, role: e.target.value})}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                            >
+                              <option value="">Select position</option>
+                              <option value="GK">Goalkeeper</option>
+                              <option value="DEF">Defender</option>
+                              <option value="MID">Midfielder</option>
+                              <option value="FWD">Forward</option>
+                            </select>
+                          </div>
+                          <div>
+                            <Label htmlFor="rating">Rating</Label>
+                            <Input
+                              id="rating"
+                              type="number"
+                              step="0.1"
+                              placeholder="0.0"
+                              value={newPlayer.rating || ''}
+                              onChange={(e) => setNewPlayer({...newPlayer, rating: parseFloat(e.target.value) || 0})}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="team_name">Team Name</Label>
+                            <Input
+                              id="team_name"
+                              placeholder="Enter team name"
+                              value={newPlayer.tname}
+                              onChange={(e) => setNewPlayer({...newPlayer, tname: e.target.value})}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="team_abbr">Team Abbreviation</Label>
+                            <Input
+                              id="team_abbr"
+                              placeholder="e.g., MUN, ARS"
+                              value={newPlayer.abbr}
+                              onChange={(e) => setNewPlayer({...newPlayer, abbr: e.target.value})}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex justify-end mt-4">
+                          <Button 
+                            onClick={() => handleAddPlayer(roaster._id)}
+                            disabled={!newPlayer.pid || !newPlayer.pname || !newPlayer.role}
+                            className="flex items-center gap-2"
+                          >
+                            <Plus className="h-4 w-4" />
+                            Add Player
+                          </Button>
+                        </div>
+                      </Card>
+                    )}
+
+                    {/* Players Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                       {(roaster.players ?? []).map((player, idx) => (
-                        <tr key={`${player?.pid ?? 'pid-missing'}-${player?.team?.tid ?? 'team-missing'}-${idx}`} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">
-                                {player.pname}
-                              </div>
-                              <div className="text-sm text-gray-500">ID: {player.pid}</div>
+                        <Card key={`${player?.pid ?? 'pid-missing'}-${player?.team?.tid ?? 'team-missing'}-${idx}`} className="p-4 hover:shadow-md transition-shadow">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex-1">
+                              <h6 className="font-semibold text-gray-900">{player.pname}</h6>
+                              <p className="text-xs text-gray-500">ID: {player.pid}</p>
                             </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              {player.role}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div>
-                              <div className="text-sm font-medium text-gray-900">
-                                {player.team.tname}
-                              </div>
-                              <div className="text-sm text-gray-500">{player.team.abbr}</div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            {editingPlayer?.pid === player.pid ? (
-                              <div className="flex gap-2">
-                                <Input
-                                  className="w-20"
-                                  value={editingPlayer.rating}
-                                  onChange={(e) => setEditingPlayer({
-                                    ...editingPlayer,
-                                    rating: e.target.value
-                                  })}
-                                />
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleUpdatePlayerRating(
-                                    roaster._id, 
-                                    player.pid, 
-                                    editingPlayer.rating
-                                  )}
-                                >
-                                  <Check className="h-3 w-3" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => setEditingPlayer(null)}
-                                >
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium">{player.rating}</span>
-                                {isEditing && (
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => setEditingPlayer({
-                                      pid: player.pid,
-                                      rating: player.rating
-                                    })}
-                                  >
-                                    <Edit className="h-3 w-3" />
-                                  </Button>
-                                )}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex gap-1">
-                              {player.is_new && (
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                  New
-                                </span>
-                              )}
-                              {player.is_injuried && (
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                  Injured
-                                </span>
-                              )}
-                              {player.is_banned && (
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                                  Banned
-                                </span>
-                              )}
-                              {player.transfer_radar && (
-                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                                  Transfer
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          {isEditing && (
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            {isEditing && (
                               <Button
                                 size="sm"
-                                variant="outline"
+                                variant="ghost"
                                 onClick={() => handleRemovePlayer(roaster._id, player.pid)}
-                                className="text-red-600 hover:text-red-700"
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50"
                               >
                                 <Trash2 className="h-3 w-3" />
                               </Button>
-                            </td>
-                          )}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </Card>
-        ))}
-      </div>
+                            )}
+                          </div>
 
-      {filteredRoasters.length === 0 && !loading && (
-        <Card className="p-8 text-center">
-          <p className="text-gray-500">No fantasy roasters found.</p>
-          <Button 
-            onClick={() => setIsCreating(true)}
-            className="mt-4"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Create Your First Roaster
-          </Button>
-        </Card>
-      )}
-    </div>
+                          <div className="space-y-2 mb-3">
+                            <div className="flex items-center justify-between">
+                              <Badge 
+                                variant="outline"
+                                className={`
+                                  ${player.role === 'GK' ? 'bg-yellow-100 text-yellow-800' : ''}
+                                  ${player.role === 'DEF' ? 'bg-blue-100 text-blue-800' : ''}
+                                  ${player.role === 'MID' ? 'bg-green-100 text-green-800' : ''}
+                                  ${player.role === 'FWD' ? 'bg-red-100 text-red-800' : ''}
+                                `}
+                              >
+                                {player.role}
+                              </Badge>
+                              <div className="text-right">
+                                {editingPlayer?.pid === player.pid ? (
+                                  <div className="flex gap-1">
+                                    <Input
+                                      className="w-16 h-6 text-xs"
+                                      value={editingPlayer.rating}
+                                      onChange={(e) => setEditingPlayer({
+                                        ...editingPlayer,
+                                        rating: e.target.value
+                                      })}
+                                    />
+                                    <Button
+                                      size="sm"
+                                      onClick={() => handleUpdatePlayerRating(
+                                        roaster._id, 
+                                        player.pid, 
+                                        editingPlayer.rating
+                                      )}
+                                      className="h-6 w-6 p-0"
+                                    >
+                                      <Check className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => setEditingPlayer(null)}
+                                      className="h-6 w-6 p-0"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1">
+                                    <Star className="h-3 w-3 text-yellow-500" />
+                                    <span className="text-sm font-semibold">{player.rating}</span>
+                                    {isEditing && (
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => setEditingPlayer({
+                                          pid: player.pid,
+                                          rating: player.rating
+                                        })}
+                                        className="h-6 w-6 p-0"
+                                      >
+                                        <Edit className="h-3 w-3" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="text-sm">
+                              <p className="font-medium text-gray-700">{player.team.tname}</p>
+                              <p className="text-gray-500">{player.team.abbr}</p>
+                            </div>
+                          </div>
+
+                          {/* Player Status Badges */}
+                          <div className="flex flex-wrap gap-1">
+                            {player.is_new && (
+                              <Badge className="text-xs bg-green-100 text-green-800">
+                                New
+                              </Badge>
+                            )}
+                            {player.is_injuried && (
+                              <Badge className="text-xs bg-red-100 text-red-800">
+                                <AlertTriangle className="h-3 w-3 mr-1" />
+                                Injured
+                              </Badge>
+                            )}
+                            {player.is_banned && (
+                              <Badge className="text-xs bg-yellow-100 text-yellow-800">
+                                <Shield className="h-3 w-3 mr-1" />
+                                Banned
+                              </Badge>
+                            )}
+                            {player.transfer_radar && (
+                              <Badge className="text-xs bg-purple-100 text-purple-800">
+                                Transfer
+                              </Badge>
+                            )}
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  </CardContent>
+                </div>
+              )}
+            </Card>
+          ))}
+        </div>
+
+        {/* Empty State */}
+        {filteredRoasters.length === 0 && !loading && (
+          <Card className="p-12 text-center">
+            <div className="flex flex-col items-center">
+              <Trophy className="h-12 w-12 text-gray-400 mb-4" />
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">No Fantasy Roasters Found</h3>
+              <p className="text-gray-500 mb-6">
+                {searchTerm || statusFilter !== 'all' 
+                  ? 'No roasters match your current filters. Try adjusting your search criteria.'
+                  : 'Get started by creating your first fantasy roaster for the season.'
+                }
+              </p>
+              <div className="flex gap-3">
+                {(searchTerm || statusFilter !== 'all') && (
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      setSearchTerm('')
+                      setStatusFilter('all')
+                    }}
+                  >
+                    Clear Filters
+                  </Button>
+                )}
+                <Button 
+                  onClick={() => setIsCreating(true)}
+                  className="flex items-center gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create First Roaster
+                </Button>
+              </div>
+            </div>
+          </Card>
+        )}
+      </div>
+    </MainLayout>
   )
 }

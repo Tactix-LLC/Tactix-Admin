@@ -269,7 +269,7 @@ export function AutoJoinMonitor() {
                         <div className="flex items-center space-x-3 mb-2">
                           <h4 className="font-medium text-gray-900">
                             {job.gameWeek || (gameWeek ? (
-                              `Game Week ${gameWeek.game_week || gameWeek.week_number || 'Unknown'}`
+                              `Game Week ${gameWeek.game_week || 'Unknown'}`
                             ) : (
                               `Game Week ${job.gameWeekId.slice(-8)}`
                             ))}

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { gameWeeksAPI } from "@/lib/api"
+import { GameWeek } from "@/types"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -32,19 +33,6 @@ interface AutoJoinStatus {
   scheduledJobs: AutoJoinJob[]
 }
 
-interface GameWeek {
-  _id: string
-  game_week: string
-  week_number: number
-  transfer_deadline: string
-  purchase_deadline: string
-  first_match_start_date: string
-  last_match_end_date: string
-  participants_count: number
-  is_done: boolean
-  is_active: boolean
-  status: string
-}
 
 export default function AutoJoinPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -370,7 +358,7 @@ export default function AutoJoinPage() {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
                             <div className="text-sm font-medium text-gray-900">
-                              {gameWeek.game_week || `Game Week ${gameWeek.week_number}`}
+                              {gameWeek.game_week ? `Game Week ${gameWeek.game_week}` : 'Unknown Game Week'}
                             </div>
                             <div className="text-sm text-gray-500">
                               ID: {gameWeek._id.slice(-8)}
