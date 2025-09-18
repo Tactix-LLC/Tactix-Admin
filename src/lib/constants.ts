@@ -146,6 +146,11 @@ export const navigationItems = [
     icon: 'FileText',
   },
   {
+    title: 'Feedback Management',
+    href: '/feedback',
+    icon: 'MessageCircle',
+  },
+  {
     title: 'System Settings',
     href: '/system-settings',
     icon: 'Settings',
