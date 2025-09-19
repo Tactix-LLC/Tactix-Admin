@@ -607,8 +607,8 @@ export const fantasyRoasterAPI = {
     return response.data
   },
 
-  populatePlayersFromAPI: async (): Promise<ApiResponse<{ message: string }>> => {
-    const response = await api.get('/api/v1/fantasyroaster/populate-players')
+  populatePlayersFromAPI: async (seasonId: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.get(`/api/v1/fantasyroaster/populate-players/${seasonId}`)
     return response.data
   },
 

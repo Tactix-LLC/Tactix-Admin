@@ -200,6 +200,7 @@ export interface FantasyRoaster {
 
 export interface CreateFantasyRoasterData {
   season_name: string
+  season_id: string
   players: FantasyPlayer[]
 }
 

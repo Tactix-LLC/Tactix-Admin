@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -8,14 +9,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { useUIStore } from '@/lib/store'
-import { fantasyRoasterAPI } from '@/lib/api'
+import { fantasyRoasterAPI, seasonsAPI } from '@/lib/api'
 import { 
   FantasyRoaster, 
   CreateFantasyRoasterData,
   UpdatePlayerRatingData,
   UpdateRoasterStatusData,
   AddPlayerData,
-  RemovePlayerData
+  RemovePlayerData,
+  Season
 } from '@/types'
 import {
   Plus,
@@ -46,7 +48,7 @@ export default function FantasyRoastersPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [showPlayers, setShowPlayers] = useState(false)
-  const [newSeasonName, setNewSeasonName] = useState('')
+  const [selectedSeasonId, setSelectedSeasonId] = useState('')
   const [editingPlayer, setEditingPlayer] = useState<{ pid: string; rating: string } | null>(null)
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [newPlayer, setNewPlayer] = useState<AddPlayerData>({
@@ -65,6 +67,12 @@ export default function FantasyRoastersPage() {
     fetchRoasters()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Fetch seasons for dropdown
+  const { data: seasonsData } = useQuery({
+    queryKey: ['seasons'],
+    queryFn: () => seasonsAPI.getAll({ limit: 100 }),
+  })
+
   const fetchRoasters = async () => {
     try {
       const response = await fantasyRoasterAPI.getFantasyRoasters()
@@ -78,21 +86,23 @@ export default function FantasyRoastersPage() {
   }
 
   const handleCreateRoaster = async () => {
-    if (!newSeasonName.trim()) {
-      addNotification({ id: Date.now().toString(), type: 'error', title: 'Error', message: 'Please enter a season name' })
+    if (!selectedSeasonId) {
+      addNotification({ id: Date.now().toString(), type: 'error', title: 'Error', message: 'Please select a season' })
       return
     }
 
     try {
       setLoading(true)
+      const selectedSeason = seasonsData?.data?.data?.find((season: Season) => season._id === selectedSeasonId)
       const data: CreateFantasyRoasterData = {
-        season_name: newSeasonName,
+        season_name: selectedSeason?.name || '',
+        season_id: selectedSeasonId,
         players: []
       }
       const response = await fantasyRoasterAPI.createFantasyRoaster(data)
       if (response.status === 'SUCCESS') {
         addNotification({ id: Date.now().toString(), type: 'success', title: 'Success', message: 'Fantasy roaster created successfully' })
-        setNewSeasonName('')
+        setSelectedSeasonId('')
         setIsCreating(false)
         fetchRoasters()
       }
@@ -104,9 +114,14 @@ export default function FantasyRoastersPage() {
   }
 
   const handlePopulatePlayers = async () => {
+    if (!selectedSeasonId) {
+      addNotification({ id: Date.now().toString(), type: 'error', title: 'Error', message: 'Please select a season first' })
+      return
+    }
+
     try {
       setLoading(true)
-      const response = await fantasyRoasterAPI.populatePlayersFromAPI()
+      const response = await fantasyRoasterAPI.populatePlayersFromAPI(selectedSeasonId)
       if (response.status === 'SUCCESS') {
         addNotification({ id: Date.now().toString(), type: 'success', title: 'Success', message: 'Players populated successfully' })
         fetchRoasters()
@@ -261,7 +276,7 @@ export default function FantasyRoastersPage() {
           <div className="flex gap-3">
             <Button 
               onClick={handlePopulatePlayers}
-              disabled={loading}
+              disabled={loading || !selectedSeasonId}
               variant="outline"
               className="flex items-center gap-2"
             >
@@ -397,7 +412,7 @@ export default function FantasyRoastersPage() {
                 <Button
                   onClick={() => {
                     setIsCreating(false)
-                    setNewSeasonName('')
+                    setSelectedSeasonId('')
                   }}
                   variant="outline"
                   size="sm"
@@ -408,13 +423,20 @@ export default function FantasyRoastersPage() {
               
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="season_name">Season Name *</Label>
-                  <Input
-                    id="season_name"
-                    value={newSeasonName}
-                    onChange={(e) => setNewSeasonName(e.target.value)}
-                    placeholder="e.g., 2023-24 Premier League"
-                  />
+                  <Label htmlFor="season_select">Select Season *</Label>
+                  <select
+                    id="season_select"
+                    value={selectedSeasonId}
+                    onChange={(e) => setSelectedSeasonId(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Choose a season...</option>
+                    {seasonsData?.data?.data?.map((season: Season) => (
+                      <option key={season._id} value={season._id}>
+                        {season.name} {season.is_active ? '(Active)' : '(Inactive)'}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               
@@ -422,7 +444,7 @@ export default function FantasyRoastersPage() {
                 <Button
                   onClick={() => {
                     setIsCreating(false)
-                    setNewSeasonName('')
+                    setSelectedSeasonId('')
                   }}
                   variant="outline"
                 >
@@ -430,7 +452,7 @@ export default function FantasyRoastersPage() {
                 </Button>
                 <Button
                   onClick={handleCreateRoaster}
-                  disabled={loading || !newSeasonName.trim()}
+                  disabled={loading || !selectedSeasonId}
                 >
                   {loading ? 'Creating...' : 'Create Roaster'}
                 </Button>
