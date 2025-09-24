@@ -28,6 +28,12 @@ import {
   UpdatePlayerRatingData,
   UpdateRoasterStatusData,
   AddPlayerData,
+  Coach,
+  CreateCoachData,
+  UpdateCoachData,
+  UpdateCoachImageData,
+  UpdateCoachStatusData,
+  SwapMajorCoachData,
   RemovePlayerData,
   Advertisement,
   CreateAdvertisementData,
@@ -251,7 +257,7 @@ export const gameWeeksAPI = {
 
 // Competitions API
 export const competitionsAPI = {
-  getAll: async (params?: ApiParams): Promise<ApiResponse<PaginatedResponse<Competition>>> => {
+  getAll: async (params?: ApiParams & { season_id?: string }): Promise<ApiResponse<PaginatedResponse<Competition>>> => {
     const response = await api.get('/api/v1/competitions', { params })
     // Normalize the response to match our expected structure
     const normalizedData = {
@@ -556,10 +562,10 @@ export const analyticsAPI = {
 // Fantasy Roaster API
 export const fantasyRoasterAPI = {
   getFantasyRoasters: async (params?: ApiParams): Promise<ApiResponse<FantasyRoaster[]>> => {
-    const response = await api.get('/api/v1/fantasyroaster', { params })
+    const response = await api.get('/api/v1/fantasyroaster/all', { params })
     const raw = response.data as unknown as {
-      data?: { fantasyRoaster?: FantasyRoaster[] } | FantasyRoaster[]
-      fantasyRoaster?: FantasyRoaster[]
+      data?: { fantasyRoasters?: FantasyRoaster[] } | FantasyRoaster[]
+      fantasyRoasters?: FantasyRoaster[]
       status?: string
       results?: number
     }
@@ -567,10 +573,10 @@ export const fantasyRoasterAPI = {
     const d = raw?.data
     if (Array.isArray(d)) {
       list = d
-    } else if (d && Array.isArray((d as { fantasyRoaster?: FantasyRoaster[] }).fantasyRoaster)) {
-      list = (d as { fantasyRoaster?: FantasyRoaster[] }).fantasyRoaster as FantasyRoaster[]
-    } else if (Array.isArray(raw?.fantasyRoaster)) {
-      list = raw.fantasyRoaster as FantasyRoaster[]
+    } else if (d && Array.isArray((d as { fantasyRoasters?: FantasyRoaster[] }).fantasyRoasters)) {
+      list = (d as { fantasyRoasters?: FantasyRoaster[] }).fantasyRoasters as FantasyRoaster[]
+    } else if (Array.isArray(raw?.fantasyRoasters)) {
+      list = raw.fantasyRoasters as FantasyRoaster[]
     }
     const status: 'SUCCESS' | 'ERROR' = raw?.status === 'ERROR' ? 'ERROR' : 'SUCCESS'
     return { status, message: 'OK', data: list }
@@ -607,8 +613,10 @@ export const fantasyRoasterAPI = {
     return response.data
   },
 
-  populatePlayersFromAPI: async (seasonId: string): Promise<ApiResponse<{ message: string }>> => {
-    const response = await api.get(`/api/v1/fantasyroaster/populate-players/${seasonId}`)
+  populatePlayersFromAPI: async (seasonId: string, competitionId: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.get(`/api/v1/fantasyroaster/populate-players/${seasonId}/${competitionId}`, {
+      timeout: 300000 // 5 minutes timeout for player population
+    })
     return response.data
   },
 
@@ -783,6 +791,76 @@ export const advertisementAPI = {
   // Get active advertisements
   getActive: async (): Promise<ApiResponse<Advertisement[]>> => {
     const response = await api.get('/api/v1/advertisement/active')
+    return response.data
+  }
+};
+
+
+// Coach API
+export const coachAPI = {
+  // Get all active coaches
+  getAll: async (params?: ApiParams): Promise<ApiResponse<PaginatedResponse<Coach>>> => {
+    const response = await api.get('/api/v1/coach', { params })
+    return response.data
+  },
+
+  // Get all coaches (including inactive)
+  getAllCoaches: async (params?: ApiParams): Promise<ApiResponse<{ coaches: Coach[] }>> => {
+    const response = await api.get('/api/v1/coach/all', { params })
+    return response.data
+  },
+
+  // Get coach by ID
+  getById: async (id: string): Promise<ApiResponse<{ coachs: Coach[] }>> => {
+    const response = await api.get(`/api/v1/coach/${id}`)
+    return response.data
+  },
+
+  // Get coach by name
+  getByName: async (name: string): Promise<ApiResponse<{ coach: Coach }>> => {
+    const response = await api.get(`/api/v1/coach/name/${encodeURIComponent(name)}`)
+    return response.data
+  },
+
+  // Create new coach
+  create: async (data: CreateCoachData): Promise<ApiResponse<{ coach: Coach }>> => {
+    const response = await api.post('/api/v1/coach', data)
+    return response.data
+  },
+
+  // Update coach basic info (name)
+  update: async (id: string, data: UpdateCoachData): Promise<ApiResponse<{ coachs: Coach }>> => {
+    const response = await api.patch(`/api/v1/coach/${id}`, data)
+    return response.data
+  },
+
+  // Update coach image
+  updateImage: async (id: string, data: UpdateCoachImageData): Promise<ApiResponse<{ coach: Coach }>> => {
+    const response = await api.patch(`/api/v1/coach/image/${id}`, data)
+    return response.data
+  },
+
+  // Update coach status (active/inactive)
+  updateStatus: async (id: string, data: UpdateCoachStatusData): Promise<ApiResponse<{ coachs: Coach }>> => {
+    const response = await api.patch(`/api/v1/coach/status/${id}`, data)
+    return response.data
+  },
+
+  // Swap major coach
+  swapMajor: async (data: SwapMajorCoachData): Promise<ApiResponse<{ coaches: Coach[], message: string }>> => {
+    const response = await api.patch('/api/v1/coach/swap', data)
+    return response.data
+  },
+
+  // Delete coach
+  delete: async (id: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.delete(`/api/v1/coach/${id}`)
+    return response.data
+  },
+
+  // Delete all coaches (non-major only)
+  deleteAll: async (deleteKey: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.delete('/api/v1/coach', { data: { deleteKey } })
     return response.data
   }
 };

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import {
   LayoutDashboard,
   Users,
+  Users2,
   Calendar,
   Trophy,
   Shield,
@@ -32,6 +33,7 @@ import { useState } from "react"
 const iconMap = {
   LayoutDashboard,
   Users,
+  Users2,
   Calendar,
   Trophy,
   Shield,

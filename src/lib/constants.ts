@@ -121,6 +121,11 @@ export const navigationItems = [
     icon: 'Users',
   },
   {
+    title: 'Coaches',
+    href: '/coaches',
+    icon: 'Users2',
+  },
+  {
     title: 'Advertisements',
     href: '/advertisements',
     icon: 'Monitor',

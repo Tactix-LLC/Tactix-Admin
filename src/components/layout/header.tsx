@@ -59,6 +59,11 @@ export function Header() {
           title: 'Financial Dashboard',
           subtitle: 'Track transactions, credits, and commissions.',
         }
+      case '/coaches':
+        return {
+          title: 'Coach Management',
+          subtitle: 'Manage football coaches and their status.',
+        }
       case '/content':
         return {
           title: 'Content Management',
