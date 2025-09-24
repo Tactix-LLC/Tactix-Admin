@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useEffect, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -8,14 +9,16 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { useUIStore } from '@/lib/store'
-import { fantasyRoasterAPI } from '@/lib/api'
+import { fantasyRoasterAPI, seasonsAPI, competitionsAPI } from '@/lib/api'
 import { 
   FantasyRoaster, 
   CreateFantasyRoasterData,
   UpdatePlayerRatingData,
   UpdateRoasterStatusData,
   AddPlayerData,
-  RemovePlayerData
+  RemovePlayerData,
+  Season,
+  Competition
 } from '@/types'
 import {
   Plus,
@@ -46,7 +49,8 @@ export default function FantasyRoastersPage() {
   const [isEditing, setIsEditing] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [showPlayers, setShowPlayers] = useState(false)
-  const [newSeasonName, setNewSeasonName] = useState('')
+  const [selectedSeasonId, setSelectedSeasonId] = useState('')
+  const [selectedCompetitionId, setSelectedCompetitionId] = useState('')
   const [editingPlayer, setEditingPlayer] = useState<{ pid: string; rating: string } | null>(null)
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [newPlayer, setNewPlayer] = useState<AddPlayerData>({
@@ -65,6 +69,19 @@ export default function FantasyRoastersPage() {
     fetchRoasters()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Fetch seasons for dropdown
+  const { data: seasonsData } = useQuery({
+    queryKey: ['seasons'],
+    queryFn: () => seasonsAPI.getAll({ limit: 100 }),
+  })
+
+  // Fetch competitions for selected season
+  const { data: competitionsData } = useQuery({
+    queryKey: ['competitions', selectedSeasonId],
+    queryFn: () => competitionsAPI.getAll({ season_id: selectedSeasonId, limit: 100 }),
+    enabled: !!selectedSeasonId,
+  })
+
   const fetchRoasters = async () => {
     try {
       const response = await fantasyRoasterAPI.getFantasyRoasters()
@@ -78,23 +95,32 @@ export default function FantasyRoastersPage() {
   }
 
   const handleCreateRoaster = async () => {
-    if (!newSeasonName.trim()) {
-      addNotification({ id: Date.now().toString(), type: 'error', title: 'Error', message: 'Please enter a season name' })
+    if (!selectedSeasonId) {
+      addNotification({ id: Date.now().toString(), type: 'error', title: 'Error', message: 'Please select a season' })
+      return
+    }
+    if (!selectedCompetitionId) {
+      addNotification({ id: Date.now().toString(), type: 'error', title: 'Error', message: 'Please select a competition' })
       return
     }
 
     try {
       setLoading(true)
+      const selectedSeason = seasonsData?.data?.data?.find((season: Season) => season._id === selectedSeasonId)
+      const selectedCompetition = competitionsData?.data?.data?.find((competition: Competition) => competition._id === selectedCompetitionId)
       const data: CreateFantasyRoasterData = {
-        season_name: newSeasonName,
+        season_name: selectedSeason?.name || '',
+        season_id: selectedSeasonId,
+        competition_id: selectedCompetitionId,
+        competition_cid: selectedCompetition?.cid || '',
         players: []
       }
       const response = await fantasyRoasterAPI.createFantasyRoaster(data)
       if (response.status === 'SUCCESS') {
-        addNotification({ id: Date.now().toString(), type: 'success', title: 'Success', message: 'Fantasy roaster created successfully' })
-        setNewSeasonName('')
+        addNotification({ id: Date.now().toString(), type: 'success', title: 'Success', message: 'Fantasy roaster created successfully. You can now populate players.' })
         setIsCreating(false)
         fetchRoasters()
+        // Keep selectedSeasonId and selectedCompetitionId so user can immediately populate players
       }
     } catch {
       addNotification({ id: Date.now().toString(), type: 'error', title: 'Error', message: 'Failed to create roaster' })
@@ -103,16 +129,48 @@ export default function FantasyRoastersPage() {
     }
   }
 
-  const handlePopulatePlayers = async () => {
+  const handlePopulatePlayers = async (roaster: FantasyRoaster) => {
+    if (!roaster.season_id || !roaster.competition_id) {
+      addNotification({ 
+        id: Date.now().toString(), 
+        type: 'error', 
+        title: 'Error', 
+        message: 'This roaster is missing season or competition data' 
+      })
+      return
+    }
+
     try {
       setLoading(true)
-      const response = await fantasyRoasterAPI.populatePlayersFromAPI()
+      
+      // Show initial loading notification
+      const loadingNotificationId = Date.now().toString()
+      addNotification({ 
+        id: loadingNotificationId, 
+        type: 'info', 
+        title: 'Populating Players', 
+        message: `Fetching players from competition... This may take up to 5 minutes.` 
+      })
+
+      const response = await fantasyRoasterAPI.populatePlayersFromAPI(roaster.season_id, roaster.competition_id)
+      
       if (response.status === 'SUCCESS') {
-        addNotification({ id: Date.now().toString(), type: 'success', title: 'Success', message: 'Players populated successfully' })
+        addNotification({ 
+          id: Date.now().toString(), 
+          type: 'success', 
+          title: 'Success', 
+          message: response.message || `Players populated successfully for ${roaster.season_name}` 
+        })
         fetchRoasters()
       }
-    } catch {
-      addNotification({ id: Date.now().toString(), type: 'error', title: 'Error', message: 'Failed to populate players' })
+    } catch (error: unknown) {
+      const errorMessage = (error as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to populate players'
+      addNotification({ 
+        id: Date.now().toString(), 
+        type: 'error', 
+        title: 'Population Failed', 
+        message: errorMessage
+      })
     } finally {
       setLoading(false)
     }
@@ -260,15 +318,6 @@ export default function FantasyRoastersPage() {
           </div>
           <div className="flex gap-3">
             <Button 
-              onClick={handlePopulatePlayers}
-              disabled={loading}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <Users className="h-4 w-4" />
-              Populate Players
-            </Button>
-            <Button 
               onClick={() => setIsCreating(true)}
               disabled={loading}
               className="flex items-center gap-2"
@@ -278,6 +327,32 @@ export default function FantasyRoastersPage() {
             </Button>
           </div>
         </div>
+
+        {/* Workflow Instructions */}
+        {(selectedSeasonId || selectedCompetitionId) && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-start space-x-3">
+              <div className="flex-shrink-0">
+                <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center">
+                  <span className="text-blue-600 text-sm font-semibold">!</span>
+                </div>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-blue-800">Workflow Instructions</h3>
+                <div className="mt-2 text-sm text-blue-700">
+                  {!selectedSeasonId && <p>• Select a season to get started</p>}
+                  {selectedSeasonId && !selectedCompetitionId && <p>• Select a competition for the chosen season</p>}
+                  {selectedSeasonId && selectedCompetitionId && (
+                    <div className="space-y-1">
+                      <p>• <strong>Step 1:</strong> Click &quot;Create Roaster&quot; to create an empty roaster structure</p>
+                      <p>• <strong>Step 2:</strong> Find your roaster below and click &quot;Populate&quot; to add ~500+ players</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -395,10 +470,7 @@ export default function FantasyRoastersPage() {
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold">Create Fantasy Roaster</h2>
                 <Button
-                  onClick={() => {
-                    setIsCreating(false)
-                    setNewSeasonName('')
-                  }}
+                  onClick={() => setIsCreating(false)}
                   variant="outline"
                   size="sm"
                 >
@@ -408,29 +480,53 @@ export default function FantasyRoastersPage() {
               
               <div className="space-y-4">
                 <div>
-                  <Label htmlFor="season_name">Season Name *</Label>
-                  <Input
-                    id="season_name"
-                    value={newSeasonName}
-                    onChange={(e) => setNewSeasonName(e.target.value)}
-                    placeholder="e.g., 2023-24 Premier League"
-                  />
+                  <Label htmlFor="season_select">Select Season *</Label>
+                  <select
+                    id="season_select"
+                    value={selectedSeasonId}
+                    onChange={(e) => {
+                      setSelectedSeasonId(e.target.value)
+                      setSelectedCompetitionId('') // Reset competition when season changes
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">Choose a season...</option>
+                    {seasonsData?.data?.data?.map((season: Season) => (
+                      <option key={season._id} value={season._id}>
+                        {season.name} {season.is_active ? '(Active)' : '(Inactive)'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="competition_select">Select Competition *</Label>
+                  <select
+                    id="competition_select"
+                    value={selectedCompetitionId}
+                    onChange={(e) => setSelectedCompetitionId(e.target.value)}
+                    disabled={!selectedSeasonId}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Choose a competition...</option>
+                    {competitionsData?.data?.data?.map((competition: Competition) => (
+                      <option key={competition._id} value={competition._id}>
+                        {competition.competition_name} {competition.is_active ? '(Active)' : '(Inactive)'}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
               
               <div className="flex justify-end space-x-2 mt-6">
                 <Button
-                  onClick={() => {
-                    setIsCreating(false)
-                    setNewSeasonName('')
-                  }}
+                  onClick={() => setIsCreating(false)}
                   variant="outline"
                 >
                   Cancel
                 </Button>
                 <Button
                   onClick={handleCreateRoaster}
-                  disabled={loading || !newSeasonName.trim()}
+                  disabled={loading || !selectedSeasonId || !selectedCompetitionId}
                 >
                   {loading ? 'Creating...' : 'Create Roaster'}
                 </Button>
@@ -511,6 +607,18 @@ export default function FantasyRoastersPage() {
                   >
                     <Eye className="h-4 w-4 mr-1" />
                     {showPlayers && selectedRoaster?._id === roaster._id ? 'Hide' : 'View'} Players
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handlePopulatePlayers(roaster)}
+                    disabled={loading || !roaster.season_id || !roaster.competition_id}
+                    className="text-blue-600 hover:bg-blue-50"
+                    title={!roaster.season_id || !roaster.competition_id ? "Missing season/competition data" : "Populate players from competition"}
+                  >
+                    <Users className="h-4 w-4 mr-1" />
+                    Populate
                   </Button>
                   
                   <Button

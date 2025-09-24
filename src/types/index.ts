@@ -192,6 +192,9 @@ export interface FantasyPlayer {
 export interface FantasyRoaster {
   _id: string
   season_name: string
+  season_id: string
+  competition_id: string
+  competition_cid: string
   is_active: boolean
   players: FantasyPlayer[]
   createdAt: string
@@ -200,6 +203,9 @@ export interface FantasyRoaster {
 
 export interface CreateFantasyRoasterData {
   season_name: string
+  season_id: string
+  competition_id: string
+  competition_cid: string
   players: FantasyPlayer[]
 }
 
@@ -505,6 +511,48 @@ export interface PollResponse {
   updatedAt: string
   __v: number
   id: string
+}
+
+// Coach Types
+export interface Coach {
+  _id: string
+  coach_name: string
+  coach_slugify_name: string
+  image_public_id: string
+  image_secure_url: string
+  is_active: boolean
+  is_major: boolean
+  createdAt: string
+  updatedAt: string
+  __v: number
+}
+
+export interface CreateCoachData {
+  coach_name: string
+  image_public_id: string
+  image_secure_url: string
+}
+
+export interface UpdateCoachData {
+  coach_name?: string
+}
+
+export interface UpdateCoachImageData {
+  image_public_id: string
+  image_secure_url: string
+}
+
+export interface UpdateCoachStatusData {
+  is_active: boolean
+}
+
+export interface SwapMajorCoachData {
+  newMajorCoachId: string
+  existingCoachId: string
+}
+
+export interface DeleteAllCoachesData {
+  deleteKey: string
 }
 
 // Generic Types

@@ -121,6 +121,11 @@ export const navigationItems = [
     icon: 'Users',
   },
   {
+    title: 'Coaches',
+    href: '/coaches',
+    icon: 'Users2',
+  },
+  {
     title: 'Advertisements',
     href: '/advertisements',
     icon: 'Monitor',
@@ -144,6 +149,11 @@ export const navigationItems = [
     title: 'Content',
     href: '/content',
     icon: 'FileText',
+  },
+  {
+    title: 'Feedback Management',
+    href: '/feedback',
+    icon: 'MessageCircle',
   },
   {
     title: 'System Settings',
