@@ -1127,4 +1127,67 @@ export const pollAPI = {
   }
 };
 
+// Notification API
+export const notificationAPI = {
+  // Send test notification
+  sendTestNotification: async (): Promise<ApiResponse<{ successCount: number; failureCount: number; totalUsers: number }>> => {
+    const response = await api.get('/api/v1/notification/test')
+    return response.data
+  },
+
+  // Send custom notification to all users
+  sendCustomNotification: async (data: { title: string; body: string; data?: Record<string, string> }): Promise<ApiResponse<{ successCount: number; failureCount: number; totalUsers: number }>> => {
+    const response = await api.post('/api/v1/notification/send/custom', data)
+    return response.data
+  },
+
+  // Send notification to specific users
+  sendNotificationToUsers: async (data: { title: string; body: string; user_ids: string[]; data?: Record<string, string> }): Promise<ApiResponse<{ successCount: number; failureCount: number; totalUsers: number }>> => {
+    const response = await api.post('/api/v1/notification/send/users', data)
+    return response.data
+  },
+
+  // Send notification to topic
+  sendNotificationToTopic: async (data: { title: string; body: string; topic: string; data?: Record<string, string> }): Promise<ApiResponse<{ success: boolean; topic: string }>> => {
+    const response = await api.post('/api/v1/notification/send/topic', data)
+    return response.data
+  },
+
+  // Get notification templates
+  getNotificationTemplates: async (): Promise<ApiResponse<{ templates: Array<{ id: string; name: string; title: string; body: string; category: string }> }>> => {
+    const response = await api.get('/api/v1/notification/templates')
+    return response.data
+  },
+
+  // Get notification statistics
+  getNotificationStats: async (): Promise<ApiResponse<{ totalClients: number; clientsWithTokens: number; clientsWithoutTokens: number; scheduledJobs: number; completedJobs: number; lastCompletedJob: unknown }>> => {
+    const response = await api.get('/api/v1/notification/stats')
+    return response.data
+  },
+
+  // Get scheduled notifications
+  getScheduledNotifications: async (): Promise<ApiResponse<{ scheduledJobs: Array<{ gameWeekId: string; nextInvocation: string | null }> }>> => {
+    const response = await api.get('/api/v1/notification/scheduled')
+    return response.data
+  },
+
+  // Get completed notifications
+  getCompletedNotifications: async (): Promise<ApiResponse<{ completedJobs: Array<{ gameWeekId: string; scheduledTime: string; actualExecutionTime: string; status: string; message?: string }> }>> => {
+    const response = await api.get('/api/v1/notification/completed')
+    return response.data
+  },
+
+  // Reschedule all notifications
+  rescheduleAllNotifications: async (): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.post('/api/v1/notification/reschedule')
+    return response.data
+  },
+
+  // Update FCM token (for client use)
+  updateFCMToken: async (fcm_token: string): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.post('/api/v1/notification/fcm-token', { fcm_token })
+    return response.data
+  },
+};
+
 export default api 
