@@ -86,9 +86,19 @@ export const navigationItems = [
     icon: 'Calendar',
   },
   {
+    title: 'Auto-Join Monitor',
+    href: '/auto-join',
+    icon: 'Activity',
+  },
+  {
     title: 'Competitions',
     href: '/competitions',
     icon: 'Trophy',
+  },
+  {
+    title: 'Seasons',
+    href: '/seasons',
+    icon: 'Calendar',
   },
   {
     title: 'Teams',
@@ -101,9 +111,39 @@ export const navigationItems = [
     icon: 'UserCheck',
   },
   {
-    title: 'Financial',
-    href: '/financial',
-    icon: 'DollarSign',
+    title: 'Player Points',
+    href: '/player-points',
+    icon: 'BarChart3',
+  },
+  {
+    title: 'Fantasy Roasters',
+    href: '/fantasy-roasters',
+    icon: 'Users',
+  },
+  {
+    title: 'Coaches',
+    href: '/coaches',
+    icon: 'Users2',
+  },
+  {
+    title: 'Advertisements',
+    href: '/advertisements',
+    icon: 'Monitor',
+  },
+  {
+    title: 'App Version',
+    href: '/app-version',
+    icon: 'Smartphone',
+  },
+  {
+    title: 'Awards',
+    href: '/awards',
+    icon: 'Award',
+  },
+  {
+    title: 'Polls',
+    href: '/polls',
+    icon: 'MessageSquare',
   },
   {
     title: 'Content',
@@ -111,13 +151,13 @@ export const navigationItems = [
     icon: 'FileText',
   },
   {
-    title: 'Analytics',
-    href: '/analytics',
-    icon: 'BarChart3',
+    title: 'Feedback Management',
+    href: '/feedback',
+    icon: 'MessageCircle',
   },
   {
-    title: 'Settings',
-    href: '/settings',
+    title: 'System Settings',
+    href: '/system-settings',
     icon: 'Settings',
   },
 ]
@@ -140,10 +180,9 @@ export const gameWeekStatusOptions = [
 
 // Competition status options
 export const competitionStatusOptions = [
-  { value: 'upcoming', label: 'Upcoming' },
-  { value: 'active', label: 'Active' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' },
+  { value: '1', label: 'Active' },
+  { value: '2', label: 'Completed' },
+  { value: '3', label: 'Cancelled' },
 ]
 
 // Pagination options

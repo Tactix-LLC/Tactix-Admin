@@ -1,12 +1,32 @@
 "use client"
 
 import React, { useState } from "react"
-import { useQuery } from "@tanstack/react-query"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { usersAPI } from "@/lib/api"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { toast } from "sonner"
 import {
   Users,
   Search,
@@ -14,17 +34,87 @@ import {
   Eye,
   UserCheck,
   UserX,
+  Trash2,
+  Mail,
+  Phone,
+  Calendar,
+  CreditCard,
+  Shield,
+  User,
+  X,
+  Save,
 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
-import { User } from "@/types"
+import { User as UserType } from "@/types"
+
+interface ApiError extends Error {
+  response?: {
+    data?: {
+      message?: string
+    }
+  }
+}
 
 export default function UsersPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize] = useState(10)
+  
+  // Dialog states
+  const [selectedUser, setSelectedUser] = useState<UserType | null>(null)
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [userToDelete, setUserToDelete] = useState<UserType | null>(null)
+  
+  // Edit form state
+  const [editForm, setEditForm] = useState({
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone_number: "",
+    account_status: true,
+  })
+  
+  const queryClient = useQueryClient()
 
+  // Mutations
+  const updateUserMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<UserType> }) => usersAPI.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] })
+      toast.success("User updated successfully")
+      setIsEditDialogOpen(false)
+    },
+    onError: (error: ApiError) => {
+      toast.error(error.response?.data?.message || "Failed to update user")
+    },
+  })
 
+  const deleteUserMutation = useMutation({
+    mutationFn: (id: string) => usersAPI.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] })
+      toast.success("User deleted successfully")
+      setIsDeleteDialogOpen(false)
+      setUserToDelete(null)
+    },
+    onError: (error: ApiError) => {
+      toast.error(error.response?.data?.message || "Failed to delete user")
+    },
+  })
+
+  const changeStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: string }) => usersAPI.changeStatus(id, status),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] })
+      toast.success("User status updated successfully")
+    },
+    onError: (error: ApiError) => {
+      toast.error(error.response?.data?.message || "Failed to update user status")
+    },
+  })
 
   const { data: usersData, isLoading, error } = useQuery({
     queryKey: ["users", searchTerm], // statusFilter is now client-side
@@ -50,10 +140,48 @@ export default function UsersPage() {
 
   const allUsers = usersData?.data?.data || []
   
+  // Handler functions
+  const handleViewUser = (user: UserType) => {
+    setSelectedUser(user)
+    setIsViewDialogOpen(true)
+  }
 
+  const handleEditUser = (user: UserType) => {
+    setSelectedUser(user)
+    setEditForm({
+      first_name: user.first_name,
+      last_name: user.last_name,
+      email: user.email,
+      phone_number: user.phone_number || "",
+      account_status: user.account_status,
+    })
+    setIsEditDialogOpen(true)
+  }
+
+  const handleDeleteUser = (user: UserType) => {
+    setUserToDelete(user)
+    setIsDeleteDialogOpen(true)
+  }
+
+  const handleStatusChange = (userId: string, newStatus: string) => {
+    changeStatusMutation.mutate({ id: userId, status: newStatus })
+  }
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (selectedUser) {
+      updateUserMutation.mutate({ id: selectedUser._id, data: editForm })
+    }
+  }
+
+  const handleDeleteConfirm = () => {
+    if (userToDelete) {
+      deleteUserMutation.mutate(userToDelete._id)
+    }
+  }
   
   // Client-side status filtering
-  const filteredUsers = allUsers.filter((user: User) => {
+  const filteredUsers = allUsers.filter((user: UserType) => {
     if (statusFilter === "all") return true
     if (statusFilter === "active") return user.account_status === true
     if (statusFilter === "inactive") return user.account_status === false
@@ -88,16 +216,6 @@ export default function UsersPage() {
     )
   }
 
-  const handleStatusChange = async (userId: string, newStatus: string) => {
-    try {
-      await usersAPI.changeStatus(userId, newStatus)
-      // Refetch users data
-      window.location.reload()
-    } catch (error) {
-      console.error("Error changing user status:", error)
-    }
-  }
-
   if (isLoading) {
     return (
       <MainLayout>
@@ -126,10 +244,6 @@ export default function UsersPage() {
             <h1 className="text-3xl font-bold text-gray-900">Users</h1>
             <p className="text-gray-600">Manage user accounts and permissions</p>
           </div>
-          <Button>
-            <Users className="mr-2 h-4 w-4" />
-            Add User
-          </Button>
         </div>
 
         {/* Stats Cards */}
@@ -150,7 +264,7 @@ export default function UsersPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {allUsers.filter((user: User) => user.account_status === true).length}
+                {allUsers.filter((user: UserType) => user.account_status === true).length}
               </div>
             </CardContent>
           </Card>
@@ -161,7 +275,7 @@ export default function UsersPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {allUsers.filter((user: User) => user.account_status === false).length}
+                {allUsers.filter((user: UserType) => user.account_status === false).length}
               </div>
             </CardContent>
           </Card>
@@ -172,7 +286,7 @@ export default function UsersPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {allUsers.filter((user: User) => {
+                {allUsers.filter((user: UserType) => {
                   const userDate = new Date(user.createdAt)
                   const now = new Date()
                   return userDate.getMonth() === now.getMonth() && 
@@ -240,7 +354,7 @@ export default function UsersPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {users.map((user: User) => (
+                  {users.map((user: UserType) => (
                     <tr key={user._id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -270,20 +384,39 @@ export default function UsersPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center space-x-2">
-                          <Button variant="ghost" size="sm">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleViewUser(user)}
+                            title="View Details"
+                          >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="sm">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleEditUser(user)}
+                            title="Edit User"
+                          >
                             <Edit className="h-4 w-4" />
                           </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleDeleteUser(user)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            title="Delete User"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                           <select
-                            value={user.status}
+                            value={user.account_status ? "active" : "inactive"}
                             onChange={(e) => handleStatusChange(user._id, e.target.value)}
                             className="text-xs border rounded px-2 py-1"
+                            disabled={changeStatusMutation.isPending}
                           >
                             <option value="active">Active</option>
                             <option value="inactive">Inactive</option>
-                            <option value="banned">Banned</option>
                           </select>
                         </div>
                       </td>
@@ -324,6 +457,218 @@ export default function UsersPage() {
             </div>
           </div>
         )}
+
+        {/* View User Dialog */}
+        <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+          <DialogContent className="max-w-2xl bg-white border-0 shadow-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center space-x-2">
+                <User className="h-5 w-5" />
+                <span>User Details</span>
+              </DialogTitle>
+              <DialogDescription>
+                Complete information about the selected user
+              </DialogDescription>
+            </DialogHeader>
+            {selectedUser && (
+              <div className="space-y-6">
+                {/* User Info */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Full Name</Label>
+                      <p className="text-lg font-semibold">{selectedUser.first_name} {selectedUser.last_name}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Email</Label>
+                      <div className="flex items-center space-x-2">
+                        <Mail className="h-4 w-4 text-gray-400" />
+                        <p className="text-sm">{selectedUser.email}</p>
+                      </div>
+                    </div>
+                    {selectedUser.phone_number && (
+                      <div>
+                        <Label className="text-sm font-medium text-gray-500">Phone</Label>
+                        <div className="flex items-center space-x-2">
+                          <Phone className="h-4 w-4 text-gray-400" />
+                          <p className="text-sm">{selectedUser.phone_number}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Status</Label>
+                      <div className="mt-1">{getStatusBadge(selectedUser.account_status)}</div>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Role</Label>
+                      <div className="flex items-center space-x-2">
+                        <Shield className="h-4 w-4 text-gray-400" />
+                        <Badge variant="outline">{selectedUser.role}</Badge>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Member Since</Label>
+                      <div className="flex items-center space-x-2">
+                        <Calendar className="h-4 w-4 text-gray-400" />
+                        <p className="text-sm">{formatDate(selectedUser.createdAt)}</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Info */}
+                <div className="border-t pt-6">
+                  <h4 className="text-sm font-medium text-gray-900 mb-4">Additional Information</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">User ID</Label>
+                      <p className="text-sm font-mono bg-gray-100 px-2 py-1 rounded">{selectedUser._id}</p>
+                    </div>
+                    {selectedUser.credit !== undefined && (
+                      <div>
+                        <Label className="text-sm font-medium text-gray-500">Credit Balance</Label>
+                        <div className="flex items-center space-x-2">
+                          <CreditCard className="h-4 w-4 text-gray-400" />
+                          <p className="text-sm font-semibold">${selectedUser.credit}</p>
+                        </div>
+                      </div>
+                    )}
+                    {selectedUser.agent_code && (
+                      <div>
+                        <Label className="text-sm font-medium text-gray-500">Agent Code</Label>
+                        <p className="text-sm font-mono bg-gray-100 px-2 py-1 rounded">{selectedUser.agent_code}</p>
+                      </div>
+                    )}
+                    {selectedUser.birth_date && (
+                      <div>
+                        <Label className="text-sm font-medium text-gray-500">Birth Date</Label>
+                        <p className="text-sm">{formatDate(selectedUser.birth_date)}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit User Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="max-w-md bg-white border-0 shadow-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center space-x-2">
+                <Edit className="h-5 w-5" />
+                <span>Edit User</span>
+              </DialogTitle>
+              <DialogDescription>
+                Update user information and settings
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="first_name">First Name</Label>
+                  <Input
+                    id="first_name"
+                    value={editForm.first_name}
+                    onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="last_name">Last Name</Label>
+                  <Input
+                    id="last_name"
+                    value={editForm.last_name}
+                    onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="phone_number">Phone Number</Label>
+                <Input
+                  id="phone_number"
+                  value={editForm.phone_number}
+                  onChange={(e) => setEditForm({ ...editForm, phone_number: e.target.value })}
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="account_status"
+                  checked={editForm.account_status}
+                  onChange={(e) => setEditForm({ ...editForm, account_status: e.target.checked })}
+                  className="rounded"
+                />
+                <Label htmlFor="account_status">Account Active</Label>
+              </div>
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={updateUserMutation.isPending}>
+                  {updateUserMutation.isPending ? (
+                    <>
+                      <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-2" />
+                      Save Changes
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete User Dialog */}
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <AlertDialogContent className="bg-white border-0 shadow-2xl">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center space-x-2">
+                <Trash2 className="h-5 w-5 text-red-600" />
+                <span>Delete User</span>
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete <strong>{userToDelete?.first_name} {userToDelete?.last_name}</strong>? 
+                This action cannot be undone and will permanently remove the user account.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteConfirm}
+                disabled={deleteUserMutation.isPending}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {deleteUserMutation.isPending ? (
+                  <>
+                    <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete User"
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </MainLayout>
   )

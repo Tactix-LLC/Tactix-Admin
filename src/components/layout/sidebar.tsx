@@ -9,11 +9,11 @@ import { Button } from "@/components/ui/button"
 import {
   LayoutDashboard,
   Users,
+  Users2,
   Calendar,
   Trophy,
   Shield,
   UserCheck,
-  DollarSign,
   FileText,
   BarChart3,
   Settings,
@@ -21,20 +21,32 @@ import {
   X,
   LogOut,
   User,
+  Activity,
+  Monitor,
+  Smartphone,
+  Award,
+  MessageSquare,
+  MessageCircle,
 } from "lucide-react"
 import { useState } from "react"
 
 const iconMap = {
   LayoutDashboard,
   Users,
+  Users2,
   Calendar,
   Trophy,
   Shield,
   UserCheck,
-  DollarSign,
   FileText,
   BarChart3,
   Settings,
+  Activity,
+  Monitor,
+  Smartphone,
+  Award,
+  MessageSquare,
+  MessageCircle,
 }
 
 export function Sidebar() {
@@ -61,7 +73,7 @@ export function Sidebar() {
       {/* Sidebar */}
       <div
         className={cn(
-          "fixed left-0 top-0 z-50 h-full w-72 transform bg-white shadow-tactix-lg transition-transform duration-300 ease-in-out lg:translate-x-0",
+          "fixed left-0 top-0 z-50 h-full w-72 transform bg-white shadow-tactix-lg transition-transform duration-300 ease-in-out lg:translate-x-0 flex flex-col",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -87,7 +99,7 @@ export function Sidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 space-y-2 p-4">
+        <nav className="flex-1 space-y-2 p-4 overflow-y-auto min-h-0">
           <div className="mb-6">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
               Main Navigation
