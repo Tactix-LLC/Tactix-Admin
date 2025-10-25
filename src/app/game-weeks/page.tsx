@@ -11,7 +11,6 @@ import {
   Calendar,
   Plus,
   Search,
-  Edit,
   Trash2,
   Eye,
   Play,
@@ -34,8 +33,10 @@ export default function GameWeeksPage() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showDeadlineModal, setShowDeadlineModal] = useState(false)
   const [showJoinedUsersModal, setShowJoinedUsersModal] = useState(false)
+  const [showPlayerDetailsModal, setShowPlayerDetailsModal] = useState(false)
   const [editingGameWeek, setEditingGameWeek] = useState<GameWeek | null>(null)
   const [selectedGameWeekForUsers, setSelectedGameWeekForUsers] = useState<GameWeek | null>(null)
+  const [selectedUserPlayers, setSelectedUserPlayers] = useState<{ user: { client_id?: { first_name?: string; last_name?: string; phone_number?: string; email?: string; _id?: string } | string; total_point?: number; team_id?: string; players?: unknown[] }; players: { full_name?: string; position?: string; pid?: string; fantasy_point?: number; points?: number; is_captain?: boolean; is_vice_captain?: boolean; club?: string }[] } | null>(null)
   
   // Form state
   const [formData, setFormData] = useState<CreateGameWeekData>({
@@ -78,13 +79,6 @@ export default function GameWeeksPage() {
 
   const deleteGameWeekMutation = useMutation({
     mutationFn: gameWeeksAPI.delete,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["game-weeks"] })
-    },
-  })
-
-  const changeStatusMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: string }) => gameWeeksAPI.changeStatus(id, status),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["game-weeks"] })
     },
@@ -216,10 +210,16 @@ export default function GameWeeksPage() {
     onSuccess: (data) => {
       const results = data.data?.results
       if (results) {
-        alert(`Auto-join completed! Success: ${results.success}, Failed: ${results.failed}, Total: ${results.totalProcessed}`)
-        if (results.errors.length > 0) {
-          console.warn('Auto-join errors:', results.errors)
+        let message = `Auto-join completed!\n\n✅ Successfully joined: ${results.success}\n❌ Failed: ${results.failed}\n📊 Total processed: ${results.totalProcessed}`
+        
+        if (results.errors && results.errors.length > 0) {
+          message += `\n\n━━━━━━━━━━━━━━━━━━━━━━\n📋 Failed Users Details:\n━━━━━━━━━━━━━━━━━━━━━━\n\n`
+          results.errors.forEach((error: string, index: number) => {
+            message += `${index + 1}. ${error}\n`
+          })
         }
+        
+        alert(message)
       }
       queryClient.invalidateQueries({ queryKey: ["game-weeks"] })
     },
@@ -233,22 +233,19 @@ export default function GameWeeksPage() {
   // Get joined users mutation
   const getJoinedUsersMutation = useMutation({
     mutationFn: async (gameWeekId: string) => {
-      console.log('🔍 [ADMIN] Getting joined users for game week:', gameWeekId)
       try {
         const response = await gameWeeksAPI.getJoinedUsers(gameWeekId)
-        console.log('✅ [ADMIN] Get joined users response:', response)
         return response
       } catch (error) {
-        console.error('❌ [ADMIN] Get joined users error:', error)
         throw error
       }
     },
-    onSuccess: (data) => {
-      console.log('✅ [ADMIN] Joined users retrieved successfully:', data)
+    onSuccess: () => {
       setShowJoinedUsersModal(true)
+      // Invalidate to refresh participants count
+      queryClient.invalidateQueries({ queryKey: ["game-weeks"] })
     },
     onError: (error: unknown) => {
-      console.error('❌ [ADMIN] Get joined users failed:', error)
       const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
       alert("Error getting joined users: " + errorMessage)
     },
@@ -283,10 +280,6 @@ export default function GameWeeksPage() {
     if (confirm("Are you sure you want to delete this game week?")) {
       deleteGameWeekMutation.mutate(id)
     }
-  }
-
-  const handleStatusChange = (id: string, newStatus: string) => {
-    changeStatusMutation.mutate({ id, status: newStatus })
   }
 
   const handleUpdateDeadlines = (gameWeek: GameWeek) => {
@@ -575,93 +568,118 @@ export default function GameWeeksPage() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         {getStatusBadge(gameWeek.is_done ? 'completed' : gameWeek.is_active ? 'active' : 'draft')}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {gameWeek.participants_count || 0} users
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-gray-900">
+                            {gameWeek.participants_count || 0}
+                          </span>
+                          <span className="text-xs text-gray-500">users</span>
+                          {(gameWeek.participants_count || 0) > 0 && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedGameWeekForUsers(gameWeek)
+                                getJoinedUsersMutation.mutate(gameWeek._id)
+                              }}
+                              className="text-xs text-blue-600 hover:text-blue-800 p-0 h-auto"
+                              disabled={getJoinedUsersMutation.isPending}
+                            >
+                              (view)
+                            </Button>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex items-center space-x-2">
-                          <Button variant="ghost" size="sm">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => handleUpdateDeadlines(gameWeek)}
-                            className="text-blue-600 hover:text-blue-800"
-                            title="Update Deadlines"
-                          >
-                            <Calendar className="h-4 w-4" />
-                          </Button>
-                          <select
-                            value={gameWeek.status}
-                            onChange={(e) => handleStatusChange(gameWeek._id, e.target.value)}
-                            className="text-xs border rounded px-2 py-1"
-                          >
-                            {gameWeekStatusOptions.map(option => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
+                        <div className="flex items-center gap-3">
+                          <div className="flex flex-col items-center">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleUpdateDeadlines(gameWeek)}
+                              className="text-blue-600 hover:text-blue-800"
+                              title="Update Deadlines"
+                            >
+                              <Calendar className="h-4 w-4" />
+                            </Button>
+                            <span className="text-[10px] text-gray-500 mt-0.5">Deadlines</span>
+                          </div>
+
                           {!gameWeek.is_done && (
                             <>
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => fetchPlayerStatsMutation.mutate(gameWeek._id)}
-                                className="text-blue-600 hover:text-blue-800"
-                                title="Fetch Player Stats"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => triggerAutoJoinMutation.mutate(gameWeek._id)}
-                                className="text-purple-600 hover:text-purple-800"
-                                title="Trigger Auto-Join"
-                                disabled={triggerAutoJoinMutation.isPending}
-                              >
-                                <Users className="h-4 w-4" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedGameWeekForUsers(gameWeek)
-                                  getJoinedUsersMutation.mutate(gameWeek._id)
-                                }}
-                                className="text-blue-600 hover:text-blue-800"
-                                title="View Joined Users"
-                                disabled={getJoinedUsersMutation.isPending}
-                              >
-                                <UserCheck className="h-4 w-4" />
-                              </Button>
-                              <Button 
-                                variant="ghost" 
-                                size="sm"
-                                onClick={() => markDoneMutation.mutate(gameWeek._id)}
-                                className="text-green-600 hover:text-green-800"
-                                title="Mark as Done"
-                              >
-                                <CheckCircle className="h-4 w-4" />
-                              </Button>
+                              <div className="flex flex-col items-center">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => fetchPlayerStatsMutation.mutate(gameWeek._id)}
+                                  className="text-blue-600 hover:text-blue-800"
+                                  title="Fetch Player Stats"
+                                  disabled={fetchPlayerStatsMutation.isPending}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                                <span className="text-[10px] text-gray-500 mt-0.5">Fetch Stats</span>
+                              </div>
+
+                              <div className="flex flex-col items-center">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => triggerAutoJoinMutation.mutate(gameWeek._id)}
+                                  className="text-purple-600 hover:text-purple-800"
+                                  title="Trigger Auto-Join"
+                                  disabled={triggerAutoJoinMutation.isPending}
+                                >
+                                  <Users className="h-4 w-4" />
+                                </Button>
+                                <span className="text-[10px] text-gray-500 mt-0.5">Auto Join</span>
+                              </div>
+
+                              <div className="flex flex-col items-center">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedGameWeekForUsers(gameWeek)
+                                    getJoinedUsersMutation.mutate(gameWeek._id)
+                                  }}
+                                  className="text-teal-600 hover:text-teal-800"
+                                  title="View Joined Users"
+                                  disabled={getJoinedUsersMutation.isPending}
+                                >
+                                  <UserCheck className="h-4 w-4" />
+                                </Button>
+                                <span className="text-[10px] text-gray-500 mt-0.5">View Users</span>
+                              </div>
+
+                              <div className="flex flex-col items-center">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm"
+                                  onClick={() => markDoneMutation.mutate(gameWeek._id)}
+                                  className="text-green-600 hover:text-green-800"
+                                  title="Mark as Done & Calculate Points"
+                                  disabled={markDoneMutation.isPending}
+                                >
+                                  <CheckCircle className="h-4 w-4" />
+                                </Button>
+                                <span className="text-[10px] text-gray-500 mt-0.5">Mark Done</span>
+                              </div>
                             </>
                           )}
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => handleDeleteGameWeek(gameWeek._id)}
-                            className="text-red-600 hover:text-red-800"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+
+                          <div className="flex flex-col items-center">
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => handleDeleteGameWeek(gameWeek._id)}
+                              className="text-red-600 hover:text-red-800"
+                              title="Delete Game Week"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                            <span className="text-[10px] text-gray-500 mt-0.5">Delete</span>
+                          </div>
                         </div>
                       </td>
                     </tr>
@@ -923,55 +941,258 @@ export default function GameWeeksPage() {
 
         {/* Joined Users Modal */}
         {showJoinedUsersModal && selectedGameWeekForUsers && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <Card className="w-full max-w-4xl max-h-[80vh] overflow-hidden">
-              <CardHeader>
-                <CardTitle>Joined Users - {selectedGameWeekForUsers.game_week}</CardTitle>
-                <CardDescription>
-                  Users who have joined this game week
-                </CardDescription>
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-6xl max-h-[85vh] flex flex-col">
+              <CardHeader className="border-b bg-gray-50 flex-shrink-0">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-xl">Joined Users - Game Week {selectedGameWeekForUsers.game_week}</CardTitle>
+                    <CardDescription>
+                      View all users who have joined this game week and their team details
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setShowJoinedUsersModal(false)
+                      setSelectedGameWeekForUsers(null)
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <XCircle className="h-5 w-5" />
+                  </Button>
+                </div>
               </CardHeader>
-              <CardContent className="overflow-y-auto">
-                {getJoinedUsersMutation.data?.data?.joinedUsers ? (
+              <CardContent className="overflow-y-auto p-6 flex-1">
+                {getJoinedUsersMutation.isPending ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+                  </div>
+                ) : getJoinedUsersMutation.data?.data?.gameWeekTeam && getJoinedUsersMutation.data.data.gameWeekTeam.length > 0 ? (
                   <div className="space-y-4">
-                    <div className="text-sm text-gray-600 mb-4">
-                      Total joined users: {getJoinedUsersMutation.data.data.joinedUsers.length}
+                    <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-5 w-5 text-blue-600" />
+                        <span className="font-semibold text-blue-900">
+                          Total Participants: {getJoinedUsersMutation.data.data.gameWeekTeam.length}
+                        </span>
+                      </div>
                     </div>
-                    <div className="grid gap-4">
-                      {getJoinedUsersMutation.data.data.joinedUsers.map((user: { client_id: string; team_id: string; total_point: number; players: unknown[] }, index: number) => (
-                        <div key={index} className="border rounded-lg p-4 bg-gray-50">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <h4 className="font-medium">User ID: {user.client_id}</h4>
-                              <p className="text-sm text-gray-600">Team ID: {user.team_id}</p>
-                              <p className="text-sm text-gray-600">Total Points: {user.total_point || 0}</p>
+                    
+                    <div className="overflow-x-auto">
+                      <table className="w-full border-collapse">
+                        <thead>
+                          <tr className="bg-gray-100 border-b">
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">#</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">User Name</th>
+                            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Contact</th>
+                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase">Total Points</th>
+                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase">Players</th>
+                            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                          {getJoinedUsersMutation.data.data.gameWeekTeam.map((user: { client_id?: { first_name?: string; last_name?: string; phone_number?: string; email?: string; _id?: string } | string; total_point?: number; team_id?: string; players?: unknown[]; _id?: string }, index: number) => (
+                            <tr key={index} className="hover:bg-gray-50 transition-colors">
+                              <td className="px-4 py-3 text-sm text-gray-600">{index + 1}</td>
+                              <td className="px-4 py-3">
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-medium text-gray-900">
+                                    {typeof user.client_id === 'object' && user.client_id?.first_name 
+                                      ? `${user.client_id.first_name} ${user.client_id.last_name || ''}`.trim()
+                                      : 'Unknown User'}
+                                  </span>
+                                  <span className="text-xs text-gray-500 font-mono">{typeof user.client_id === 'string' ? user.client_id : typeof user.client_id === 'object' ? user.client_id?._id : ''}</span>
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex flex-col">
+                                  {typeof user.client_id === 'object' && user.client_id?.phone_number && (
+                                    <span className="text-sm text-gray-700">{user.client_id.phone_number}</span>
+                                  )}
+                                  {typeof user.client_id === 'object' && user.client_id?.email && (
+                                    <span className="text-xs text-gray-500">{user.client_id.email}</span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-800">
+                                  {user.total_point || 0} pts
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span className="text-sm text-gray-700">{user.players?.length || 0} players</span>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedUserPlayers({ 
+                                      user: { ...user }, 
+                                      players: (user.players || []) as { full_name?: string; position?: string; pid?: string; fantasy_point?: number; points?: number; is_captain?: boolean; is_vice_captain?: boolean; club?: string }[]
+                                    })
+                                    setShowPlayerDetailsModal(true)
+                                  }}
+                                  className="text-blue-600 hover:text-blue-800"
+                                >
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  View Team
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-500 text-lg font-medium">No users have joined this game week yet</p>
+                    <p className="text-gray-400 text-sm mt-2">Users will appear here once they join this game week</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Player Details Modal */}
+        {showPlayerDetailsModal && selectedUserPlayers && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-5xl max-h-[85vh] flex flex-col">
+              <CardHeader className="border-b bg-gray-50 flex-shrink-0">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-xl">
+                      {typeof selectedUserPlayers.user.client_id === 'object' && selectedUserPlayers.user.client_id?.first_name 
+                        ? `${selectedUserPlayers.user.client_id.first_name} ${selectedUserPlayers.user.client_id.last_name || ''}`.trim()
+                        : 'User'}&apos;s Team
+                    </CardTitle>
+                    <CardDescription>
+                      View the squad selected for this game week
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setShowPlayerDetailsModal(false)
+                      setSelectedUserPlayers(null)
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <XCircle className="h-5 w-5" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="overflow-y-auto p-6 flex-1">
+                <div className="space-y-4">
+                  {/* User Info */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <div>
+                      <p className="text-xs text-gray-600 uppercase font-semibold mb-1">User</p>
+                      <p className="text-sm font-medium text-gray-900">
+                        {typeof selectedUserPlayers.user.client_id === 'object' && selectedUserPlayers.user.client_id?.first_name 
+                          ? `${selectedUserPlayers.user.client_id.first_name} ${selectedUserPlayers.user.client_id.last_name || ''}`.trim()
+                          : 'Unknown'}
+                      </p>
+                      {typeof selectedUserPlayers.user.client_id === 'object' && selectedUserPlayers.user.client_id?.phone_number && (
+                        <p className="text-xs text-gray-600">{selectedUserPlayers.user.client_id.phone_number}</p>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-600 uppercase font-semibold mb-1">Total Points</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {selectedUserPlayers.user.total_point || 0}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-600 uppercase font-semibold mb-1">Squad Size</p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {selectedUserPlayers.players.length} players
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Players Grid */}
+                  {selectedUserPlayers.players.length > 0 ? (
+                    <div className="grid gap-3">
+                      {selectedUserPlayers.players.map((player, idx: number) => (
+                        <div 
+                          key={idx} 
+                          className="border rounded-lg p-4 bg-white hover:shadow-md transition-shadow"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full flex items-center justify-center text-white font-bold">
+                                  {idx + 1}
+                                </div>
+                                <div>
+                                  <h4 className="font-semibold text-gray-900">
+                                    {player.full_name || 'Unknown Player'}
+                                  </h4>
+                                  <div className="flex items-center gap-2 text-xs text-gray-600 mt-1">
+                                    {player.position && (
+                                      <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded font-medium">
+                                        {player.position}
+                                      </span>
+                                    )}
+                                    {player.club && (
+                                      <span className="text-gray-500">{player.club}</span>
+                                    )}
+                                    {player.pid && (
+                                      <span className="text-gray-400 text-[10px]">ID: {player.pid}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
                             </div>
-                            <div className="text-right">
-                              <p className="text-sm text-gray-600">Players: {user.players?.length || 0}</p>
+                            <div className="flex items-center gap-4">
+                              <div className="text-center">
+                                <p className="text-xs text-gray-500">Points</p>
+                                <p className="text-lg font-bold text-green-600">
+                                  {player.fantasy_point || player.points || 0}
+                                </p>
+                              </div>
+                              {player.is_captain && (
+                                <span className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-semibold">
+                                  Captain
+                                </span>
+                              )}
+                              {player.is_vice_captain && (
+                                <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-semibold">
+                                  Vice Captain
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
                       ))}
                     </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500">No users have joined this game week yet.</p>
-                  </div>
-                )}
-                
-                <div className="flex justify-end pt-4">
-                  <Button 
-                    onClick={() => {
-                      setShowJoinedUsersModal(false)
-                      setSelectedGameWeekForUsers(null)
-                    }}
-                    variant="outline"
-                  >
-                    Close
-                  </Button>
+                  ) : (
+                    <div className="text-center py-12">
+                      <Users className="h-16 w-16 text-gray-300 mx-auto mb-4" />
+                      <p className="text-gray-500">No players found for this team</p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
+              <div className="border-t p-4 bg-gray-50 flex-shrink-0">
+                <Button 
+                  onClick={() => {
+                    setShowPlayerDetailsModal(false)
+                    setSelectedUserPlayers(null)
+                  }}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Close
+                </Button>
+              </div>
             </Card>
           </div>
         )}

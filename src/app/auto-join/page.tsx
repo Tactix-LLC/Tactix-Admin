@@ -17,26 +17,46 @@ import {
   XCircle,
   AlertCircle,
   Users,
-  Calendar,
   Clock,
   Settings,
   BarChart3,
 } from "lucide-react"
 import { formatDateTime } from "@/lib/utils"
 
-interface AutoJoinJob {
-  gameWeekId: string
-  nextInvocation: string | null
+interface AutoJoinLog {
+  _id: string
+  game_week: string
+  game_week_id: string
+  executed_at: string
+  trigger_type: 'automatic' | 'manual'
+  status: 'success' | 'partial' | 'failed'
+  successful_joins: number
+  failed_joins: number
+  already_joined: number
+  execution_time_ms: number
+  error_details: Array<{
+    user_id?: string
+    user_name?: string
+    user_contact?: string
+    error_message: string
+  }>
 }
 
-interface AutoJoinStatus {
-  scheduledJobs: AutoJoinJob[]
+interface AutoJoinStatistics {
+  total_executions: number
+  total_successful: number
+  total_partial: number
+  total_failed: number
+  total_users_joined: number
+  average_execution_time: number
 }
 
 
 export default function AutoJoinPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [selectedLog, setSelectedLog] = useState<AutoJoinLog | null>(null)
+  const [showErrorModal, setShowErrorModal] = useState(false)
   const queryClient = useQueryClient()
 
   // Fetch auto join status
@@ -50,6 +70,19 @@ export default function AutoJoinPage() {
   const { data: gameWeeksData } = useQuery({
     queryKey: ["game-weeks-for-auto-join"],
     queryFn: () => gameWeeksAPI.getAll({ limit: 100 }),
+  })
+
+  // Fetch auto-join logs
+  const { data: logsData } = useQuery({
+    queryKey: ["auto-join-logs"],
+    queryFn: () => gameWeeksAPI.getAutoJoinLogs({ limit: 50 }),
+    refetchInterval: 60000, // Refresh every minute
+  })
+
+  // Fetch auto-join statistics
+  const { data: statsData } = useQuery({
+    queryKey: ["auto-join-statistics"],
+    queryFn: () => gameWeeksAPI.getAutoJoinStatistics(),
   })
 
   // Reschedule all jobs mutation
@@ -73,13 +106,21 @@ export default function AutoJoinPage() {
     onSuccess: (data) => {
       const results = data.data?.results
       if (results) {
-        alert(`Auto-join completed! Success: ${results.success}, Failed: ${results.failed}, Total: ${results.totalProcessed}`)
-        if (results.errors.length > 0) {
-          console.warn('Auto-join errors:', results.errors)
+        let message = `Auto-join completed!\n\n✅ Successfully joined: ${results.success}\n❌ Failed: ${results.failed}\n📊 Total processed: ${results.totalProcessed}`
+        
+        if (results.errors && results.errors.length > 0) {
+          message += `\n\n━━━━━━━━━━━━━━━━━━━━━━\n📋 Failed Users Details:\n━━━━━━━━━━━━━━━━━━━━━━\n\n`
+          results.errors.forEach((error: string, index: number) => {
+            message += `${index + 1}. ${error}\n`
+          })
         }
+        
+        alert(message)
       }
       queryClient.invalidateQueries({ queryKey: ["auto-join-status"] })
       queryClient.invalidateQueries({ queryKey: ["game-weeks"] })
+      queryClient.invalidateQueries({ queryKey: ["auto-join-logs"] })
+      queryClient.invalidateQueries({ queryKey: ["auto-join-statistics"] })
     },
     onError: (error: unknown) => {
       console.error("Error triggering auto-join:", error)
@@ -90,6 +131,15 @@ export default function AutoJoinPage() {
 
   const gameWeeks = gameWeeksData?.data?.data || []
   const scheduledJobs = autoJoinStatus?.data?.scheduledJobs || []
+  const logs = logsData?.data?.logs || []
+  const statistics: AutoJoinStatistics = statsData?.data?.statistics || {
+    total_executions: 0,
+    total_successful: 0,
+    total_partial: 0,
+    total_failed: 0,
+    total_users_joined: 0,
+    average_execution_time: 0,
+  }
 
   // Filter game weeks based on search and status
   const filteredGameWeeks = gameWeeks.filter((gw: GameWeek) => {
@@ -107,10 +157,6 @@ export default function AutoJoinPage() {
   })
 
   // Helper functions
-  const getGameWeekDetails = (gameWeekId: string) => {
-    return gameWeeks.find((gw: GameWeek) => gw._id === gameWeekId)
-  }
-
   const getTimeUntilExecution = (nextInvocation: string | null) => {
     if (!nextInvocation) return "Unknown"
     
@@ -404,6 +450,256 @@ export default function AutoJoinPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Execution History Section */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-bold text-gray-900 flex items-center">
+              <BarChart3 className="mr-2 h-6 w-6" />
+              Execution History
+            </h2>
+          </div>
+
+          {/* Statistics Cards */}
+          <div className="grid gap-4 md:grid-cols-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Executions</CardTitle>
+                <Activity className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{statistics.total_executions || 0}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Success Rate</CardTitle>
+                <CheckCircle className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-green-600">
+                  {statistics.total_executions > 0 
+                    ? Math.round((statistics.total_successful / statistics.total_executions) * 100) 
+                    : 0}%
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Users Joined</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{statistics.total_users_joined || 0}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Avg Time</CardTitle>
+                <Clock className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {statistics.average_execution_time 
+                    ? `${(statistics.average_execution_time / 1000).toFixed(1)}s` 
+                    : 'N/A'}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Execution Logs Table */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent Executions</CardTitle>
+              <CardDescription>Last 50 auto-join executions with detailed results</CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Game Week
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Executed At
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Trigger
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Success/Failed
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Duration
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {logs.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                          No execution history yet. Auto-join executions will appear here.
+                        </td>
+                      </tr>
+                    ) : (
+                      logs.map((log: AutoJoinLog) => (
+                        <tr key={log._id} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">
+                              Game Week {log.game_week}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {log.game_week_id?.slice?.(-8) || 'N/A'}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {formatDateTime(log.executed_at)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {log.trigger_type === 'automatic' ? (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                🤖 Automatic
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                👤 Manual
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {log.status === 'success' && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Success
+                              </span>
+                            )}
+                            {log.status === 'partial' && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                                <AlertCircle className="h-3 w-3 mr-1" />
+                                Partial
+                              </span>
+                            )}
+                            {log.status === 'failed' && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                <XCircle className="h-3 w-3 mr-1" />
+                                Failed
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">
+                              <span className="text-green-600 font-medium">{log.successful_joins}</span> / 
+                              <span className="text-red-600 font-medium ml-1">{log.failed_joins}</span>
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {log.already_joined > 0 && `${log.already_joined} already joined`}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {(log.execution_time_ms / 1000).toFixed(2)}s
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            {log.error_details && log.error_details.length > 0 && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedLog(log)
+                                  setShowErrorModal(true)
+                                }}
+                                className="text-red-600 hover:text-red-800"
+                                title="View Errors"
+                              >
+                                <AlertCircle className="h-4 w-4 mr-1" />
+                                View Errors ({log.error_details.length})
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Error Details Modal */}
+        {showErrorModal && selectedLog && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-4xl max-h-[90vh] flex flex-col">
+              <CardHeader className="border-b bg-gray-50 flex-shrink-0">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-xl">Error Details - Game Week {selectedLog.game_week}</CardTitle>
+                    <CardDescription>
+                      {selectedLog.failed_joins} failed joins • Executed {formatDateTime(selectedLog.executed_at)}
+                    </CardDescription>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setShowErrorModal(false)
+                      setSelectedLog(null)
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <XCircle className="h-5 w-5" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="overflow-y-auto p-6 flex-1">
+                <div className="space-y-4">
+                  {selectedLog.error_details.map((error, index: number) => (
+                    <div key={index} className="border rounded-lg p-4 bg-red-50">
+                      <div className="flex items-start">
+                        <AlertCircle className="h-5 w-5 text-red-600 mt-0.5 mr-3 flex-shrink-0" />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-2">
+                            <div>
+                              <h4 className="font-medium text-gray-900">
+                                {error.user_name || 'Unknown User'}
+                              </h4>
+                              <p className="text-sm text-gray-600">{error.user_contact}</p>
+                            </div>
+                            {error.user_id && (
+                              <span className="text-xs text-gray-500 font-mono">{error.user_id.slice(-8)}</span>
+                            )}
+                          </div>
+                          <p className="text-sm text-red-700 mt-2">
+                            <strong>Error:</strong> {error.error_message}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+              <div className="border-t p-4 bg-gray-50 flex-shrink-0">
+                <Button
+                  onClick={() => {
+                    setShowErrorModal(false)
+                    setSelectedLog(null)
+                  }}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Close
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
 
         {/* Information Panel */}
         <Card>

@@ -54,6 +54,35 @@ import {
   PollResponse
 } from '@/types'
 
+// Auto-join log types
+interface AutoJoinLog {
+  _id: string
+  game_week: string
+  game_week_id: string
+  executed_at: string
+  trigger_type: 'automatic' | 'manual'
+  status: 'success' | 'partial' | 'failed'
+  successful_joins: number
+  failed_joins: number
+  already_joined: number
+  execution_time_ms: number
+  error_details: Array<{
+    user_id?: string
+    user_name?: string
+    user_contact?: string
+    error_message: string
+  }>
+}
+
+interface AutoJoinStatistics {
+  total_executions: number
+  total_successful: number
+  total_partial: number
+  total_failed: number
+  total_users_joined: number
+  average_execution_time: number
+}
+
 // Create axios instance
 const api: AxiosInstance = axios.create({
   baseURL: API_CONFIG.BASE_URL,
@@ -61,6 +90,13 @@ const api: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+})
+
+// Debug: Log the API configuration
+console.log('🔧 API Configuration:', {
+  BASE_URL: API_CONFIG.BASE_URL,
+  TIMEOUT: API_CONFIG.TIMEOUT,
+  ENV_VAR: process.env.NEXT_PUBLIC_API_URL
 })
 
 // Request interceptor to add auth token
@@ -96,6 +132,7 @@ api.interceptors.response.use(
 // Auth API
 export const authAPI = {
   login: async (email_or_phone: string, password: string): Promise<ApiResponse<{ admin: AdminUser; token: string }>> => {
+    console.log('🔐 Login request to:', api.defaults.baseURL + '/api/v1/admins/login')
     const response = await api.post('/api/v1/admins/login', { email_or_phone, password })
     return response.data
   },
@@ -247,10 +284,26 @@ export const gameWeeksAPI = {
   },
 
   // Get joined users for a game week
-  getJoinedUsers: async (gameWeekId: string): Promise<ApiResponse<{ joinedUsers: Array<{ client_id: string; team_id: string; total_point: number; players: unknown[] }> }>> => {
-    console.log('🔍 [API] Calling getJoinedUsers:', { gameWeekId, url: `/api/v1/gameweekteam?game_week_id=${gameWeekId}` })
+  getJoinedUsers: async (gameWeekId: string): Promise<ApiResponse<{ gameWeekTeam: Array<{ client_id: { first_name: string; last_name: string; phone_number?: string; email?: string; _id: string } | string; team_id: string; total_point: number; players: unknown[] }> }>> => {
     const response = await api.get(`/api/v1/gameweekteam?game_week_id=${gameWeekId}`)
-    console.log('✅ [API] getJoinedUsers response:', response.data)
+    return response.data
+  },
+
+  // Get all auto-join logs
+  getAutoJoinLogs: async (params?: { game_week_id?: string; trigger_type?: string; status?: string; limit?: number; skip?: number }): Promise<ApiResponse<{ logs: AutoJoinLog[] }>> => {
+    const response = await api.get('/api/v1/auto-join-logs', { params })
+    return response.data
+  },
+
+  // Get auto-join statistics
+  getAutoJoinStatistics: async (): Promise<ApiResponse<{ statistics: AutoJoinStatistics }>> => {
+    const response = await api.get('/api/v1/auto-join-logs/statistics')
+    return response.data
+  },
+
+  // Get auto-join logs for a specific game week
+  getAutoJoinLogsByGameWeek: async (gameWeekId: string): Promise<ApiResponse<{ logs: AutoJoinLog[] }>> => {
+    const response = await api.get(`/api/v1/auto-join-logs/game-week/${gameWeekId}`)
     return response.data
   },
 }
