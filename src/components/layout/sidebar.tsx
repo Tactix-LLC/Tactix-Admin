@@ -27,6 +27,7 @@ import {
   Award,
   MessageSquare,
   MessageCircle,
+  Bell,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -47,6 +48,7 @@ const iconMap = {
   Award,
   MessageSquare,
   MessageCircle,
+  Bell,
 }
 
 export function Sidebar() {
@@ -104,7 +106,7 @@ export function Sidebar() {
             <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
               Main Navigation
             </p>
-            {navigationItems.slice(0, 4).map((item) => {
+            {navigationItems.slice(0, 5).map((item) => {
               const Icon = iconMap[item.icon as keyof typeof iconMap]
               const isActive = pathname === item.href
 
@@ -134,7 +136,7 @@ export function Sidebar() {
             <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
               Management
             </p>
-            {navigationItems.slice(4, 8).map((item) => {
+            {navigationItems.slice(5, 9).map((item) => {
               const Icon = iconMap[item.icon as keyof typeof iconMap]
               const isActive = pathname === item.href
 
@@ -164,7 +166,7 @@ export function Sidebar() {
             <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
               System
             </p>
-            {navigationItems.slice(8).map((item) => {
+            {navigationItems.slice(9).map((item) => {
               const Icon = iconMap[item.icon as keyof typeof iconMap]
               const isActive = pathname === item.href
 

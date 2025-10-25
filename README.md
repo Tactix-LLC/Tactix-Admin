@@ -54,7 +54,9 @@ A comprehensive admin dashboard for managing the Tactix Fantasy Football platfor
 3. **Set up environment variables**
    Create a `.env.local` file in the root directory:
    ```env
-   NEXT_PUBLIC_API_URL=http://localhost:3000
+   NEXT_PUBLIC_API_URL=https://ff-api-eahf.onrender.com
+   <!-- NEXT_PUBLIC_API_URL=http://localhost:3000 -->
+
    ```
 
 4. **Run the development server**
@@ -63,7 +65,7 @@ A comprehensive admin dashboard for managing the Tactix Fantasy Football platfor
    ```
 
 5. **Open your browser**
-   Navigate to [http://localhost:3000](http://localhost:3000)
+   Navigate to [http://localhost:3001](http://localhost:3001) (admin panel runs on port 3001)
 
 ## 🔧 Configuration
 
@@ -71,7 +73,8 @@ A comprehensive admin dashboard for managing the Tactix Fantasy Football platfor
 Update the API base URL in `src/lib/constants.ts`:
 ```typescript
 export const API_CONFIG = {
-  BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000',
+  BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'https://ff-api-eahf.onrender.com',
+  // BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000',
   TIMEOUT: 10000,
 }
 ```
