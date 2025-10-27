@@ -64,7 +64,9 @@ export const colors = {
 
 // API Configuration
 export const API_CONFIG = {
-  BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000',
+  BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'https://ff-api-eahf.onrender.com',
+  // BASE_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000',
+
   TIMEOUT: 10000,
 }
 
@@ -89,6 +91,11 @@ export const navigationItems = [
     title: 'Auto-Join Monitor',
     href: '/auto-join',
     icon: 'Activity',
+  },
+  {
+    title: 'Notifications',
+    href: '/notifications',
+    icon: 'Bell',
   },
   {
     title: 'Competitions',

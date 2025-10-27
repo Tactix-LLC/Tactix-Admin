@@ -15,7 +15,8 @@ CLOUDINARY_API_KEY=316164158773758
 CLOUDINARY_API_SECRET=sOIixRXUPB9BEBV1KnoB4HU1J4Q
 
 # API Configuration
-NEXT_PUBLIC_API_URL=http://localhost:3000
+NEXT_PUBLIC_API_URL=https://ff-api-eahf.onrender.com
+# NEXT_PUBLIC_API_URL=http://localhost:3000
 ```
 
 ## Cloudinary Dashboard Setup
