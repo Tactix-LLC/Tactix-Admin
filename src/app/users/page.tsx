@@ -43,6 +43,7 @@ import {
   User,
   X,
   Save,
+  UserPlus,
 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { User as UserType } from "@/types"
@@ -115,6 +116,27 @@ export default function UsersPage() {
       toast.error(error.response?.data?.message || "Failed to update user status")
     },
   })
+
+  const joinUserToGameWeekMutation = useMutation({
+    mutationFn: (clientId: string) => usersAPI.joinUserToGameWeek(clientId),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["users"] })
+      if (data.data?.alreadyJoined) {
+        toast.info(data.message || "User is already joined to the active game week")
+      } else {
+        toast.success(data.message || "User successfully joined to the active game week")
+      }
+    },
+    onError: (error: ApiError) => {
+      toast.error(error.response?.data?.message || "Failed to join user to game week")
+    },
+  })
+
+  const handleJoinUserToGameWeek = (userId: string) => {
+    if (confirm("Are you sure you want to join this user to the current active game week?")) {
+      joinUserToGameWeekMutation.mutate(userId)
+    }
+  }
 
   const { data: usersData, isLoading, error } = useQuery({
     queryKey: ["users", searchTerm], // statusFilter is now client-side
@@ -399,6 +421,16 @@ export default function UsersPage() {
                             title="Edit User"
                           >
                             <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleJoinUserToGameWeek(user._id)}
+                            className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            title="Join to Active Game Week"
+                            disabled={joinUserToGameWeekMutation.isPending}
+                          >
+                            <UserPlus className="h-4 w-4" />
                           </Button>
                           <Button 
                             variant="ghost" 

@@ -195,6 +195,12 @@ export const usersAPI = {
     const response = await api.get('/api/v1/client/count')
     return response.data
   },
+
+  // Join user to active game week (admin only)
+  joinUserToGameWeek: async (clientId: string): Promise<ApiResponse<{ gameWeekTeam: unknown; alreadyJoined?: boolean }>> => {
+    const response = await api.post(`/api/v1/gameweekteam/admin/join/${clientId}`)
+    return response.data
+  },
 }
 
 // Game Weeks API  
@@ -264,7 +270,10 @@ export const gameWeeksAPI = {
   // Auto-join functionality
   triggerAutoJoin: async (id: string): Promise<ApiResponse<{ gameWeekId: string; results: { success: number; failed: number; totalProcessed: number; errors: string[] } }>> => {
     console.log('🔍 [API] Calling triggerAutoJoin:', { id, url: `/api/v1/gameweek/${id}/auto-join` })
-    const response = await api.post(`/api/v1/gameweek/${id}/auto-join`)
+    // Use longer timeout for auto-join (120 seconds) as it processes all users
+    const response = await api.post(`/api/v1/gameweek/${id}/auto-join`, {}, {
+      timeout: 120000, // 120 seconds
+    })
     console.log('✅ [API] triggerAutoJoin response:', response.data)
     return response.data
   },
