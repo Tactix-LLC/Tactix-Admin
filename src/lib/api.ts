@@ -527,38 +527,37 @@ export const contentAPI = {
   
   // Terms
   getTerms: async (): Promise<ApiResponse<{ termsAndConditions: Content[] }>> => {
-    const response = await api.get('/api/v1/terms')
+    // Use admin endpoint to get all terms, including unpublished
+    const response = await api.get('/api/v1/terms/all')
     return response.data
   },
   
-  updateTerms: async (data: Partial<Content>): Promise<ApiResponse<Content>> => {
-    // First try to get existing terms
-    try {
-      const existing = await api.get('/api/v1/terms')
-      if (existing.data?.data?.termsAndConditions?.length > 0) {
-        // Update existing
-        const id = existing.data.data.termsAndConditions[0]._id
-        const response = await api.patch(`/api/v1/terms/${id}`, data)
-        return response.data
-      }
-    } catch (error) {
-      // If no existing terms, create new
-    }
-    // Create new terms
+  createTerms: async (data: Partial<Content>): Promise<ApiResponse<Content>> => {
     const response = await api.post('/api/v1/terms', data)
+    return response.data
+  },
+  
+  updateTerms: async (id: string, data: Partial<Content>): Promise<ApiResponse<Content>> => {
+    const response = await api.patch(`/api/v1/terms/${id}`, data)
+    return response.data
+  },
+  
+  deleteTerms: async (id: string): Promise<ApiResponse> => {
+    const response = await api.delete(`/api/v1/terms/${id}`)
     return response.data
   },
   
   // Privacy
   getPrivacy: async (): Promise<ApiResponse<{ privacy: Content[] }>> => {
-    const response = await api.get('/api/v1/privacy')
+    // Use admin endpoint to get all privacy policies, including unpublished
+    const response = await api.get('/api/v1/privacy/all')
     return response.data
   },
   
   updatePrivacy: async (data: Partial<Content>): Promise<ApiResponse<Content>> => {
-    // First try to get existing privacy
+    // First try to get existing privacy (use admin endpoint to get all, including unpublished)
     try {
-      const existing = await api.get('/api/v1/privacy')
+      const existing = await api.get('/api/v1/privacy/all')
       if (existing.data?.data?.privacy?.length > 0) {
         // Update existing
         const id = existing.data.data.privacy[0]._id

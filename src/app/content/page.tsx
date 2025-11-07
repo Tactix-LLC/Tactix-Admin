@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useState } from "react"
-import type { FAQ } from "@/types"
-import { Plus, Trash2, Save } from "lucide-react"
+import type { FAQ, Content } from "@/types"
+import { Plus, Trash2, Save, Edit2, X } from "lucide-react"
 import { useUIStore } from "@/lib/store"
 
 export default function ContentPage() {
@@ -19,6 +19,8 @@ export default function ContentPage() {
   const [privacy, setPrivacy] = useState("")
   const [about, setAbout] = useState("")
   const [newFAQ, setNewFAQ] = useState({ title: "", content: "" })
+  const [editingTermId, setEditingTermId] = useState<string | null>(null)
+  const [editingTerm, setEditingTerm] = useState({ title: "", content: "", is_published: true })
 
   const { data: faqData, refetch: refetchFAQs, isLoading: faqLoading, error: faqError } = useQuery({ 
     queryKey: ["faqs"], 
@@ -37,24 +39,46 @@ export default function ContentPage() {
     queryFn: contentAPI.getAbout 
   })
 
-  // Initialize editors when data arrives
-  const t = termsData?.data?.termsAndConditions?.[0]?.content ?? ""
+  // Initialize editors when data arrives (only for privacy and about, terms now uses list view)
   const p = privacyData?.data?.privacy?.[0]?.content ?? ""
   const a = aboutData?.data?.aboutUs?.[0]?.content ?? ""
 
-
   // Keep controlled values synced on first load
-  if (!terms && t) setTerms(t)
   if (!privacy && p) setPrivacy(p)
   if (!about && a) setAbout(a)
 
-  const saveTerms = useMutation({
-    mutationFn: () => contentAPI.updateTerms({ 
+  const createTerms = useMutation({
+    mutationFn: () => contentAPI.createTerms({ 
       title: "Terms and Conditions",
-      content: terms
+      content: terms,
+      is_published: true
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["terms"] })
+      setTerms("")
+      addNotification({
+        id: Date.now().toString(),
+        type: 'success',
+        title: 'Success',
+        message: 'Terms and conditions created successfully'
+      })
+    },
+    onError: (error: unknown) => {
+      addNotification({
+        id: Date.now().toString(),
+        type: 'error',
+        title: 'Error',
+        message: (error as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to create terms'
+      })
+    }
+  })
+
+  const updateTerm = useMutation({
+    mutationFn: ({ id, data }: { id: string, data: Partial<Content> }) => contentAPI.updateTerms(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["terms"] })
+      setEditingTermId(null)
+      setEditingTerm({ title: "", content: "", is_published: true })
       addNotification({
         id: Date.now().toString(),
         type: 'success',
@@ -71,10 +95,32 @@ export default function ContentPage() {
       })
     }
   })
+
+  const deleteTerm = useMutation({
+    mutationFn: (id: string) => contentAPI.deleteTerms(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["terms"] })
+      addNotification({
+        id: Date.now().toString(),
+        type: 'success',
+        title: 'Success',
+        message: 'Terms and conditions deleted successfully'
+      })
+    },
+    onError: (error: unknown) => {
+      addNotification({
+        id: Date.now().toString(),
+        type: 'error',
+        title: 'Error',
+        message: (error as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Failed to delete terms'
+      })
+    }
+  })
   const savePrivacy = useMutation({
     mutationFn: () => contentAPI.updatePrivacy({ 
       title: "Privacy Policy",
-      content: privacy
+      content: privacy,
+      is_published: true
     }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["privacy"] })
@@ -95,11 +141,28 @@ export default function ContentPage() {
     }
   })
   const saveAbout = useMutation({
-    mutationFn: () => contentAPI.updateAbout({ 
-      content: about,
-      version_title: "About Us",
-      version_content: about 
-    }),
+    mutationFn: () => {
+      // Get existing about data to preserve version_title and version_content
+      const existingAbout = aboutData?.data?.aboutUs?.[0];
+      
+      // Use existing version fields if they exist, otherwise use defaults
+      const versionTitle = existingAbout?.version_title || "About Us";
+      // For version_content, use existing if it exists and is valid, otherwise use truncated content
+      let versionContent = existingAbout?.version_content || "";
+      
+      // If version_content is empty or we want to update it, use a truncated version of the main content
+      if (!versionContent || versionContent.length === 0) {
+        versionContent = about.length > 2000 
+          ? about.substring(0, 1997) + "..." 
+          : about;
+      }
+      
+      return contentAPI.updateAbout({ 
+        content: about,
+        version_title: versionTitle,
+        version_content: versionContent
+      });
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["about"] })
       addNotification({
@@ -234,31 +297,150 @@ export default function ContentPage() {
         {/* Terms */}
         <Card>
           <CardHeader>
-            <CardTitle>Terms and Conditions</CardTitle>
+            <CardTitle className="flex items-center justify-between">
+              <span>Terms and Conditions</span>
+              <Button
+                onClick={() => createTerms.mutate()}
+                disabled={!terms.trim() || createTerms.isPending}
+                className="flex items-center gap-2"
+                size="sm"
+              >
+                <Plus className="h-4 w-4" />
+                Add Terms
+              </Button>
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <Label htmlFor="terms">Content</Label>
-              {termsError && (
-                <div className="text-red-500 text-sm">Error loading terms: {termsError.message}</div>
-              )}
-              <textarea 
-                id="terms"
-                className="w-full min-h-[200px] border rounded-md p-4 text-sm" 
-                value={terms} 
-                onChange={(e) => setTerms(e.target.value)}
-                placeholder="Enter terms and conditions content..."
-              />
-              <div className="flex justify-end">
-                <Button 
-                  onClick={() => saveTerms.mutate()} 
-                  disabled={saveTerms.isPending}
-                  className="flex items-center gap-2"
-                >
-                  <Save className="h-4 w-4" />
-                  {saveTerms.isPending ? 'Saving...' : 'Save Terms'}
-                </Button>
+          <CardContent className="space-y-6">
+            {/* Add New Terms Form */}
+            <div className="border-2 border-dashed border-gray-200 rounded-lg p-6">
+              <h3 className="text-lg font-medium mb-4">Add New Terms and Conditions</h3>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="terms">Content</Label>
+                  {termsError && (
+                    <div className="text-red-500 text-sm">Error loading terms: {termsError.message}</div>
+                  )}
+                  <textarea 
+                    id="terms"
+                    className="w-full min-h-[200px] border rounded-md p-4 text-sm mt-1" 
+                    value={terms} 
+                    onChange={(e) => setTerms(e.target.value)}
+                    placeholder="Enter terms and conditions content..."
+                  />
+                </div>
               </div>
+            </div>
+
+            {/* Existing Terms */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium">Existing Terms and Conditions</h3>
+              {termsLoading ? (
+                <div className="text-center py-4">Loading terms...</div>
+              ) : termsError ? (
+                <div className="text-red-500 py-4">Error loading terms: {termsError.message}</div>
+              ) : (termsData?.data?.termsAndConditions ?? []).length === 0 ? (
+                <div className="text-gray-500 py-4">No terms found</div>
+              ) : (
+                (termsData?.data?.termsAndConditions ?? []).map((term: Content) => (
+                  <div key={term._id} className="border rounded-lg p-4 hover:bg-gray-50">
+                    {editingTermId === term._id ? (
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="edit-term-title">Title</Label>
+                          <Input
+                            id="edit-term-title"
+                            value={editingTerm.title}
+                            onChange={(e) => setEditingTerm(prev => ({ ...prev, title: e.target.value }))}
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="edit-term-content">Content</Label>
+                          <textarea
+                            id="edit-term-content"
+                            value={editingTerm.content}
+                            onChange={(e) => setEditingTerm(prev => ({ ...prev, content: e.target.value }))}
+                            className="w-full min-h-[200px] border rounded-md p-3 mt-1"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={editingTerm.is_published}
+                              onChange={(e) => setEditingTerm(prev => ({ ...prev, is_published: e.target.checked }))}
+                              className="rounded"
+                            />
+                            Published
+                          </Label>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => updateTerm.mutate({ id: term._id, data: editingTerm })}
+                            disabled={updateTerm.isPending}
+                            className="flex items-center gap-2"
+                            size="sm"
+                          >
+                            <Save className="h-4 w-4" />
+                            Save
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              setEditingTermId(null)
+                              setEditingTerm({ title: "", content: "", is_published: true })
+                            }}
+                            variant="outline"
+                            size="sm"
+                            className="flex items-center gap-2"
+                          >
+                            <X className="h-4 w-4" />
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="font-medium text-gray-900">{term.title}</div>
+                            {term.is_published ? (
+                              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Published</span>
+                            ) : (
+                              <span className="text-xs bg-gray-100 text-gray-800 px-2 py-1 rounded">Draft</span>
+                            )}
+                          </div>
+                          <div className="text-sm text-gray-600 whitespace-pre-wrap">{term.content}</div>
+                        </div>
+                        <div className="flex gap-2 ml-4">
+                          <Button
+                            onClick={() => {
+                              setEditingTermId(term._id)
+                              setEditingTerm({
+                                title: term.title || "",
+                                content: term.content || "",
+                                is_published: term.is_published ?? true
+                              })
+                            }}
+                            variant="outline"
+                            size="sm"
+                            className="text-blue-600 hover:text-blue-700"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            onClick={() => deleteTerm.mutate(term._id)}
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
