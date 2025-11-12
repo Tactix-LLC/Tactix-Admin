@@ -259,6 +259,40 @@ export const gameWeeksAPI = {
     return response.data
   },
 
+  // Get game week completion job status
+  getCompletionStatus: async (id: string): Promise<ApiResponse<{ jobStatus: {
+    gameWeekId: string
+    status: 'pending' | 'processing' | 'completed' | 'failed'
+    progress: {
+      current: number
+      total: number
+      percentage: number
+    }
+    startedAt?: string
+    completedAt?: string
+    error?: string
+  } }>> => {
+    const response = await api.get(`/api/v1/gameweek/${id}/completion-status`)
+    return response.data
+  },
+
+  // Get all completion jobs
+  getAllCompletionJobs: async (): Promise<ApiResponse<{ jobs: Array<{
+    gameWeekId: string
+    status: 'pending' | 'processing' | 'completed' | 'failed'
+    progress: {
+      current: number
+      total: number
+      percentage: number
+    }
+    startedAt?: string
+    completedAt?: string
+    error?: string
+  }> }>> => {
+    const response = await api.get(`/api/v1/gameweek/completion-jobs/all`)
+    return response.data
+  },
+
   // Fetch player stats for a game week
   fetchPlayerStats: async (id: string): Promise<ApiResponse<{ message: string }>> => {
     console.log('🔍 [API] Calling fetchPlayerStats:', { id, url: `/api/v1/gameweek/${id}/fetchplayerstat` })

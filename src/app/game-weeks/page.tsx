@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { gameWeeksAPI, seasonsAPI, competitionsAPI } from "@/lib/api"
 import { MainLayout } from "@/components/layout/main-layout"
@@ -155,13 +155,56 @@ export default function GameWeeksPage() {
     },
   })
 
+  const [pollingGameWeekId, setPollingGameWeekId] = useState<string | null>(null)
+  const [completionProgress, setCompletionProgress] = useState<{
+    [key: string]: { percentage: number; current: number; total: number; status: string }
+  }>({})
+
+  // Poll for completion status
+  useEffect(() => {
+    if (!pollingGameWeekId) return
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const statusResponse = await gameWeeksAPI.getCompletionStatus(pollingGameWeekId)
+        const jobStatus = statusResponse.data?.jobStatus
+
+        if (jobStatus) {
+          setCompletionProgress(prev => ({
+            ...prev,
+            [pollingGameWeekId]: {
+              percentage: jobStatus.progress.percentage,
+              current: jobStatus.progress.current,
+              total: jobStatus.progress.total,
+              status: jobStatus.status,
+            }
+          }))
+
+          // If completed or failed, stop polling
+          if (jobStatus.status === 'completed') {
+            setPollingGameWeekId(null)
+            queryClient.invalidateQueries({ queryKey: ["game-weeks"] })
+            alert("✅ Game week completion finished! All points have been calculated successfully.")
+          } else if (jobStatus.status === 'failed') {
+            setPollingGameWeekId(null)
+            alert("❌ Game week completion failed: " + (jobStatus.error || "Unknown error"))
+          }
+        }
+      } catch (error) {
+        console.error("Error polling completion status:", error)
+      }
+    }, 2000) // Poll every 2 seconds
+
+    return () => clearInterval(pollInterval)
+  }, [pollingGameWeekId, queryClient])
+
   const markDoneMutation = useMutation({
     mutationFn: async (id: string) => {
       console.log('🔍 [ADMIN] Marking game week as done:', id)
       try {
         const response = await gameWeeksAPI.markDone(id, true)
         console.log('✅ [ADMIN] Mark done response:', response)
-        return response
+        return { response, id }
       } catch (error) {
         console.error('❌ [ADMIN] Mark done error:', error)
         if (error && typeof error === 'object' && 'response' in error) {
@@ -172,9 +215,14 @@ export default function GameWeeksPage() {
         throw error
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["game-weeks"] })
-      alert("Game week marked as done. Point calculation will continue in background.")
+    onSuccess: (data) => {
+      const gameWeekId = data.id
+      setPollingGameWeekId(gameWeekId)
+      setCompletionProgress(prev => ({
+        ...prev,
+        [gameWeekId]: { percentage: 0, current: 0, total: 0, status: 'pending' }
+      }))
+      alert("🚀 Game week completion job started. Points calculation is running in the background.\n\nYou'll be notified when it's complete.")
     },
     onError: (error: unknown) => {
       console.error("Error marking as done:", error)
@@ -659,12 +707,29 @@ export default function GameWeeksPage() {
                                   onClick={() => markDoneMutation.mutate(gameWeek._id)}
                                   className="text-green-600 hover:text-green-800"
                                   title="Mark as Done & Calculate Points"
-                                  disabled={markDoneMutation.isPending}
+                                  disabled={markDoneMutation.isPending || completionProgress[gameWeek._id]?.status === 'processing'}
                                 >
                                   <CheckCircle className="h-4 w-4" />
                                 </Button>
                                 <span className="text-[10px] text-gray-500 mt-0.5">Mark Done</span>
                               </div>
+
+                              {completionProgress[gameWeek._id] && completionProgress[gameWeek._id].status === 'processing' && (
+                                <div className="flex flex-col items-center gap-1 min-w-[60px]">
+                                  <div className="text-[10px] text-blue-600 font-semibold">
+                                    {completionProgress[gameWeek._id].percentage}%
+                                  </div>
+                                  <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                    <div
+                                      className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                                      style={{ width: `${completionProgress[gameWeek._id].percentage}%` }}
+                                    />
+                                  </div>
+                                  <div className="text-[9px] text-gray-500">
+                                    {completionProgress[gameWeek._id].current}/{completionProgress[gameWeek._id].total}
+                                  </div>
+                                </div>
+                              )}
                             </>
                           )}
 
