@@ -133,6 +133,11 @@ export const navigationItems = [
     icon: 'Users2',
   },
   {
+    title: 'Injuries & Bans',
+    href: '/injuries-bans',
+    icon: 'AlertCircle',
+  },
+  {
     title: 'Advertisements',
     href: '/advertisements',
     icon: 'Monitor',
