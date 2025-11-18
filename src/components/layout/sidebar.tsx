@@ -28,6 +28,7 @@ import {
   MessageSquare,
   MessageCircle,
   Bell,
+  AlertCircle,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -49,6 +50,7 @@ const iconMap = {
   MessageSquare,
   MessageCircle,
   Bell,
+  AlertCircle,
 }
 
 export function Sidebar() {

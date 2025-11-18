@@ -1285,4 +1285,53 @@ export const notificationAPI = {
   },
 };
 
+// Injuries and Bans API
+export const injuriesBansAPI = {
+  getAll: async (): Promise<AxiosResponse> => {
+    return api.get('/api/v1/injuriesban/all')
+  },
+  getLatest: async (): Promise<AxiosResponse> => {
+    return api.get('/api/v1/injuriesban')
+  },
+  getById: async (id: string): Promise<AxiosResponse> => {
+    return api.get(`/api/v1/injuriesban/${id}`)
+  },
+  create: async (data: {
+    player: {
+      pid: string
+      pname: string
+      role: string
+      rating: string
+      team: {
+        tid: string
+        tname: string
+        logo: string
+        fullname: string
+        abbr: string
+      }
+    }
+    state: "Injury" | "Ban" | "U/A"
+    injury_title?: string
+    chance: number
+  }): Promise<AxiosResponse> => {
+    return api.post('/api/v1/injuriesban', data)
+  },
+  update: async (
+    id: string,
+    data: Partial<{
+      state: "Injury" | "Ban" | "U/A"
+      injury_title?: string
+      chance: number
+    }>
+  ): Promise<AxiosResponse> => {
+    return api.patch(`/api/v1/injuriesban/${id}`, data)
+  },
+  delete: async (id: string): Promise<AxiosResponse> => {
+    return api.delete(`/api/v1/injuriesban/${id}`)
+  },
+  deleteAll: async (delete_key: string): Promise<AxiosResponse> => {
+    return api.delete('/api/v1/injuriesban', { data: { delete_key } })
+  },
+};
+
 export default api 
