@@ -54,6 +54,11 @@ export function Header() {
           title: 'Player Statistics',
           subtitle: 'Manage player data and performance statistics.',
         }
+      case '/injuries-bans':
+        return {
+          title: 'Injuries & Bans',
+          subtitle: 'Track injured or suspended players and manage their return status.',
+        }
       case '/financial':
         return {
           title: 'Financial Dashboard',

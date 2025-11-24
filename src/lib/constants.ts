@@ -98,6 +98,11 @@ export const navigationItems = [
     icon: 'Bell',
   },
   {
+    title: 'Subscriptions',
+    href: '/subscriptions',
+    icon: 'CreditCard',
+  },
+  {
     title: 'Competitions',
     href: '/competitions',
     icon: 'Trophy',
@@ -131,6 +136,11 @@ export const navigationItems = [
     title: 'Coaches',
     href: '/coaches',
     icon: 'Users2',
+  },
+  {
+    title: 'Injuries & Bans',
+    href: '/injuries-bans',
+    icon: 'AlertCircle',
   },
   {
     title: 'Advertisements',
