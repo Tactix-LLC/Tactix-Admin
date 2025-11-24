@@ -29,6 +29,7 @@ import {
   MessageCircle,
   Bell,
   AlertCircle,
+  CreditCard,
 } from "lucide-react"
 import { useState } from "react"
 
@@ -51,6 +52,7 @@ const iconMap = {
   MessageCircle,
   Bell,
   AlertCircle,
+  CreditCard,
 }
 
 export function Sidebar() {
@@ -218,7 +220,7 @@ export function Sidebar() {
                     <User className="h-4 w-4" />
                     <span>Profile Settings</span>
                   </button>
-                  <button 
+                  <button
                     onClick={handleLogout}
                     className="flex w-full items-center space-x-3 rounded-lg px-3 py-2 text-sm text-red-600 hover:bg-red-50"
                   >
