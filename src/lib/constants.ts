@@ -98,6 +98,11 @@ export const navigationItems = [
     icon: 'Bell',
   },
   {
+    title: 'Subscriptions',
+    href: '/subscriptions',
+    icon: 'CreditCard',
+  },
+  {
     title: 'Competitions',
     href: '/competitions',
     icon: 'Trophy',

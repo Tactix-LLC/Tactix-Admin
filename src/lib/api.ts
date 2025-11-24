@@ -1334,4 +1334,108 @@ export const injuriesBansAPI = {
   },
 };
 
+// Subscriptions API
+export const subscriptionsAPI = {
+  // Get all subscriptions with statistics
+  getAll: async (params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    plan?: string;
+    search?: string;
+  }): Promise<ApiResponse<{
+    subscriptions: Array<{
+      _id: string;
+      full_name: string;
+      email: string;
+      phone_number?: string;
+      subscription_status: 'active' | 'inactive';
+      subscription_plan?: 'monthly' | 'yearly';
+      subscription_expires_at?: string;
+      createdAt: string;
+    }>;
+    pagination: {
+      total: number;
+      page: number;
+      limit: number;
+      pages: number;
+    };
+    statistics: {
+      totalUsers: number;
+      activeSubscriptions: number;
+      monthlySubscriptions: number;
+      yearlySubscriptions: number;
+      expiredSubscriptions: number;
+      revenue: {
+        monthly: string;
+        yearly: string;
+        mrr: string;
+      };
+    };
+  }>> => {
+    const response = await api.get('/api/v1/admins/subscriptions', { params });
+    return response.data;
+  },
+
+  // Get subscription analytics
+  getAnalytics: async (): Promise<ApiResponse<{
+    trends: Array<{
+      _id: { year: number; month: number };
+      count: number;
+      monthly: number;
+      yearly: number;
+    }>;
+    expiringSubscriptions: {
+      count: number;
+      users: Array<{
+        full_name: string;
+        email: string;
+        subscription_plan: string;
+        subscription_expires_at: string;
+      }>;
+    };
+  }>> => {
+    const response = await api.get('/api/v1/admins/subscriptions/analytics');
+    return response.data;
+  },
+
+  // Get user subscription details
+  getUserSubscription: async (userId: string): Promise<ApiResponse<{
+    user: {
+      _id: string;
+      full_name: string;
+      email: string;
+      phone_number?: string;
+      subscription_status: 'active' | 'inactive';
+      subscription_plan?: 'monthly' | 'yearly';
+      subscription_expires_at?: string;
+      createdAt: string;
+    };
+  }>> => {
+    const response = await api.get(`/api/v1/admins/subscriptions/${userId}`);
+    return response.data;
+  },
+
+  // Expire/Cancel subscription
+  expireSubscription: async (userId: string): Promise<ApiResponse<{
+    userId: string;
+    subscription_status: 'inactive';
+  }>> => {
+    const response = await api.patch(`/api/v1/admins/subscriptions/${userId}/expire`);
+    return response.data;
+  },
+
+  // Sync subscription from RevenueCat
+  syncSubscription: async (userId: string): Promise<ApiResponse<{
+    userId: string;
+    subscription_status: 'active' | 'inactive';
+    subscription_plan?: 'monthly' | 'yearly';
+    subscription_expires_at?: string;
+    synced: boolean;
+  }>> => {
+    const response = await api.post(`/api/v1/admins/subscriptions/${userId}/sync`);
+    return response.data;
+  },
+};
+
 export default api 
