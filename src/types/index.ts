@@ -127,7 +127,7 @@ export interface TeamPlayer {
   minutesplayed?: number
   goalscored?: number
   assist?: number
-  [key: string]: any // Allow for additional fields
+  [key: string]: string | number | boolean | undefined // Allow for additional fields
 }
 
 // Team Types
