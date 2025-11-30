@@ -38,6 +38,7 @@ interface InjuryBan {
 
 export default function InjuriesBansPage() {
   const [search, setSearch] = useState("")
+  const [teamFilter, setTeamFilter] = useState<string>("all")
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<InjuryBan | null>(null)
   const queryClient = useQueryClient()
@@ -62,15 +63,40 @@ export default function InjuriesBansPage() {
   })
 
   const all = useMemo(() => data?.data?.data?.injuriesBans ?? [], [data])
+  
+  // Get unique teams/clubs from all injuries/bans
+  const uniqueTeams = useMemo(() => {
+    const teams = new Set<string>()
+    all.forEach((item: InjuryBan) => {
+      if (item.player?.team?.tname) {
+        teams.add(item.player.team.tname)
+      }
+    })
+    return Array.from(teams).sort()
+  }, [all])
+  
   const injuriesBans = useMemo(() => {
+    let filtered = all
+    
+    // Apply team/club filter
+    if (teamFilter !== "all") {
+      filtered = filtered.filter((item: InjuryBan) => 
+        item.player?.team?.tname === teamFilter
+      )
+    }
+    
+    // Apply search filter
     const term = search.trim().toLowerCase()
-    if (!term) return all
-    return all.filter((item: InjuryBan) =>
-      item.player.pname.toLowerCase().includes(term) ||
-      item.player.team.tname.toLowerCase().includes(term) ||
-      item.state.toLowerCase().includes(term)
-    )
-  }, [all, search])
+    if (term) {
+      filtered = filtered.filter((item: InjuryBan) =>
+        item.player.pname.toLowerCase().includes(term) ||
+        item.player.team.tname.toLowerCase().includes(term) ||
+        item.state.toLowerCase().includes(term)
+      )
+    }
+    
+    return filtered
+  }, [all, search, teamFilter])
 
   const availablePlayers = useMemo(() => rosterPlayersData ?? [], [rosterPlayersData])
 
@@ -150,17 +176,32 @@ export default function InjuriesBansPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Search</CardTitle>
+            <CardTitle>Search & Filter</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <Input
-                placeholder="Search by player name, team, or status..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-10"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <Input
+                  placeholder="Search by player name, team, or status..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select value={teamFilter} onValueChange={setTeamFilter}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Filter by Team/Club" />
+                </SelectTrigger>
+                <SelectContent className="bg-white text-gray-900 border border-gray-200 shadow-lg">
+                  <SelectItem value="all">All Teams/Clubs</SelectItem>
+                  {uniqueTeams.map((team) => (
+                    <SelectItem key={team} value={team}>
+                      {team}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>

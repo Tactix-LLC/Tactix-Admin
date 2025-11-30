@@ -2,7 +2,7 @@
 
 import React, { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { usersAPI } from "@/lib/api"
+import { usersAPI, teamsAPI } from "@/lib/api"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -41,12 +41,14 @@ import {
   CreditCard,
   Shield,
   User,
-  X,
   Save,
   UserPlus,
+  Users2,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
-import { User as UserType } from "@/types"
+import { User as UserType, Team, TeamPlayer } from "@/types"
 
 interface ApiError extends Error {
   response?: {
@@ -68,6 +70,9 @@ export default function UsersPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [userToDelete, setUserToDelete] = useState<UserType | null>(null)
+  const [isTeamDialogOpen, setIsTeamDialogOpen] = useState(false)
+  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
+  const [isLoadingTeam, setIsLoadingTeam] = useState(false)
   
   // Edit form state
   const [editForm, setEditForm] = useState({
@@ -199,6 +204,34 @@ export default function UsersPage() {
   const handleDeleteConfirm = () => {
     if (userToDelete) {
       deleteUserMutation.mutate(userToDelete._id)
+    }
+  }
+
+  const handleViewTeam = async (user: UserType) => {
+    if (!user.has_team) {
+      toast.error("User does not have a team")
+      return
+    }
+    
+    setIsLoadingTeam(true)
+    setIsTeamDialogOpen(true)
+    setSelectedUser(user)
+    
+    try {
+      const result = await teamsAPI.getByClientId(user._id)
+      if (result.data && result.data.team) {
+        setSelectedTeam(result.data.team)
+      } else {
+        toast.error("Team data not found")
+        setIsTeamDialogOpen(false)
+      }
+    } catch (error: unknown) {
+      console.error("Error loading team:", error)
+      const apiError = error as { response?: { data?: { message?: string } } }
+      toast.error(apiError.response?.data?.message || "Failed to load team information")
+      setIsTeamDialogOpen(false)
+    } finally {
+      setIsLoadingTeam(false)
     }
   }
   
@@ -368,6 +401,9 @@ export default function UsersPage() {
                       Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Team
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Joined
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -399,7 +435,31 @@ export default function UsersPage() {
                         {user.email}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                                                    {getStatusBadge(user.account_status)}
+                        {getStatusBadge(user.account_status)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {user.has_team ? (
+                          <div className="flex items-center space-x-2">
+                            <Badge className="bg-green-100 text-green-800">
+                              <CheckCircle2 className="w-3 h-3 mr-1" />
+                              Has Team
+                            </Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleViewTeam(user)}
+                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                              title="View Team"
+                            >
+                              <Users2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <Badge variant="outline" className="bg-gray-100 text-gray-600">
+                            <XCircle className="w-3 h-3 mr-1" />
+                            No Team
+                          </Badge>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {formatDate(user.createdAt)}
@@ -701,6 +761,154 @@ export default function UsersPage() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* View Team Dialog */}
+        <Dialog open={isTeamDialogOpen} onOpenChange={setIsTeamDialogOpen}>
+          <DialogContent className="max-w-4xl bg-white border-0 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center space-x-2">
+                <Users2 className="h-5 w-5" />
+                <span>Team Details</span>
+              </DialogTitle>
+              <DialogDescription>
+                {selectedUser && `${selectedUser.first_name} ${selectedUser.last_name}'s team information`}
+              </DialogDescription>
+            </DialogHeader>
+            {isLoadingTeam ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
+              </div>
+            ) : selectedTeam ? (
+              <div className="space-y-6">
+                {/* Team Info */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <Label className="text-sm font-medium text-gray-500">Team Name</Label>
+                    <p className="text-lg font-semibold">{selectedTeam.name || 'Unnamed Team'}</p>
+                  </div>
+                  <div>
+                    <Label className="text-sm font-medium text-gray-500">Total Points</Label>
+                    <p className="text-lg font-semibold">{selectedTeam.total_points || 0}</p>
+                  </div>
+                  {selectedTeam.formation && (
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Formation</Label>
+                      <p className="text-sm">{selectedTeam.formation}</p>
+                    </div>
+                  )}
+                  <div>
+                    <Label className="text-sm font-medium text-gray-500">Team ID</Label>
+                    <p className="text-sm font-mono bg-gray-100 px-2 py-1 rounded">{selectedTeam._id}</p>
+                  </div>
+                </div>
+
+                {/* Players Info */}
+                <div className="border-t pt-6">
+                  <h4 className="text-sm font-medium text-gray-900 mb-4">Players ({selectedTeam.players?.length || 0})</h4>
+                  {selectedTeam.players && selectedTeam.players.length > 0 ? (
+                    <div className="space-y-3">
+                      {/* Group players by position */}
+                      {['Goalkeeper', 'Defender', 'Midfielder', 'Forward'].map((position) => {
+                        const positionPlayers = Array.isArray(selectedTeam.players) 
+                          ? selectedTeam.players.filter((p: TeamPlayer | string): p is TeamPlayer => {
+                              if (typeof p === 'string') return false
+                              return p.position === position
+                            })
+                          : []
+                        
+                        if (positionPlayers.length === 0) return null
+                        
+                        return (
+                          <div key={position} className="bg-gray-50 rounded-lg p-4">
+                            <h5 className="text-sm font-semibold text-gray-900 mb-3">{position}s ({positionPlayers.length})</h5>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {positionPlayers.map((player: TeamPlayer, index: number) => (
+                                <div key={index} className="bg-white rounded-lg p-3 border border-gray-200">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <p className="text-sm font-medium text-gray-900">
+                                        {player.full_name || player.pname || 'Unknown Player'}
+                                      </p>
+                                      <p className="text-xs text-gray-500">{player.club || 'Unknown Club'}</p>
+                                      <div className="mt-2 flex flex-wrap gap-2">
+                                        <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-800 rounded">
+                                          Price: ${player.price || 0}
+                                        </span>
+                                        {player.fantasy_point !== undefined && (
+                                          <span className="text-xs px-2 py-0.5 bg-green-100 text-green-800 rounded">
+                                            Points: {player.fantasy_point || player.final_fantasy_point || 0}
+                                          </span>
+                                        )}
+                                        {player.is_captain && (
+                                          <span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded font-semibold">
+                                            © Captain
+                                          </span>
+                                        )}
+                                        {player.is_vice_captain && (
+                                          <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-800 rounded">
+                                            VC Vice Captain
+                                          </span>
+                                        )}
+                                        {player.is_bench && (
+                                          <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-800 rounded">
+                                            Bench
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <p className="text-xs text-gray-400 mt-2 font-mono">ID: {player.pid}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })}
+                      
+                      {/* Show players that are strings (if any) */}
+                      {Array.isArray(selectedTeam.players) && selectedTeam.players.some((p: TeamPlayer | string) => typeof p === 'string') && (
+                        <div className="bg-yellow-50 rounded-lg p-4 border border-yellow-200">
+                          <h5 className="text-sm font-semibold text-yellow-900 mb-2">Player IDs (String Format)</h5>
+                          <p className="text-sm text-gray-600">
+                            {selectedTeam.players
+                              .filter((p: TeamPlayer | string): p is string => typeof p === 'string')
+                              .join(', ')}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No players assigned</p>
+                  )}
+                </div>
+
+                {/* Additional Info */}
+                <div className="border-t pt-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {selectedTeam.game_week_id && (
+                      <div>
+                        <Label className="text-sm font-medium text-gray-500">Game Week ID</Label>
+                        <p className="text-sm font-mono bg-gray-100 px-2 py-1 rounded">{selectedTeam.game_week_id}</p>
+                      </div>
+                    )}
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Created At</Label>
+                      <p className="text-sm">{formatDate(selectedTeam.created_at)}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Updated At</Label>
+                      <p className="text-sm">{formatDate(selectedTeam.updated_at)}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <p className="text-gray-500">No team information available</p>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </MainLayout>
   )

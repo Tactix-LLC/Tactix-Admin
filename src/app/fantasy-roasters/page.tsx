@@ -37,7 +37,8 @@ import {
   AlertTriangle,
   Calendar,
   User,
-  Trophy
+  Trophy,
+  Filter
 } from 'lucide-react'
 
 export default function FantasyRoastersPage() {
@@ -53,6 +54,7 @@ export default function FantasyRoastersPage() {
   const [selectedCompetitionId, setSelectedCompetitionId] = useState('')
   const [editingPlayer, setEditingPlayer] = useState<{ pid: string; rating: string } | null>(null)
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [teamFilter, setTeamFilter] = useState<string>('all')
   const [newPlayer, setNewPlayer] = useState<AddPlayerData>({
     pid: '',
     pname: '',
@@ -294,6 +296,27 @@ export default function FantasyRoastersPage() {
       return matchesSearch && matchesStatus
     })
   }, [roasters, searchTerm, statusFilter])
+
+  // Get unique teams from selected roaster's players
+  const uniqueTeams = useMemo(() => {
+    if (!selectedRoaster?.players || !showPlayers) return []
+    const teams = new Set<string>()
+    selectedRoaster.players.forEach((player) => {
+      if (player?.team?.tname) {
+        teams.add(player.team.tname)
+      }
+    })
+    return Array.from(teams).sort()
+  }, [selectedRoaster, showPlayers])
+
+  // Filter players by team for selected roaster
+  const filteredPlayers = useMemo(() => {
+    if (!selectedRoaster?.players || !showPlayers) return []
+    if (teamFilter === 'all') return selectedRoaster.players
+    return selectedRoaster.players.filter((player) => 
+      player?.team?.tname === teamFilter
+    )
+  }, [selectedRoaster, teamFilter, showPlayers])
 
 
   if (loading && roasters.length === 0) {
@@ -602,6 +625,10 @@ export default function FantasyRoastersPage() {
                     onClick={() => {
                       setSelectedRoaster(roaster)
                       setShowPlayers(!showPlayers || selectedRoaster?._id !== roaster._id)
+                      // Reset team filter when switching roasters
+                      if (!showPlayers || selectedRoaster?._id !== roaster._id) {
+                        setTeamFilter('all')
+                      }
                     }}
                     className="flex-1"
                   >
@@ -639,7 +666,10 @@ export default function FantasyRoastersPage() {
                     <div className="flex justify-between items-center mb-6">
                       <div>
                         <h4 className="text-lg font-semibold">Squad Players</h4>
-                        <p className="text-sm text-gray-600">{roaster.players?.length ?? 0} players in roster</p>
+                        <p className="text-sm text-gray-600">
+                          {filteredPlayers.length} of {roaster.players?.length ?? 0} players
+                          {teamFilter !== 'all' && ` (Filtered: ${teamFilter})`}
+                        </p>
                       </div>
                       <Button 
                         size="sm" 
@@ -651,6 +681,38 @@ export default function FantasyRoastersPage() {
                         {isEditing ? 'Done Editing' : 'Edit Players'}
                       </Button>
                     </div>
+
+                    {/* Team Filter */}
+                    {uniqueTeams.length > 0 && (
+                      <div className="mb-6">
+                        <div className="flex items-center gap-3">
+                          <Filter className="h-4 w-4 text-gray-500" />
+                          <Label className="text-sm font-medium text-gray-700">Filter by Team/Club:</Label>
+                          <select
+                            value={teamFilter}
+                            onChange={(e) => setTeamFilter(e.target.value)}
+                            className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="all">All Teams/Clubs</option>
+                            {uniqueTeams.map((team) => (
+                              <option key={team} value={team}>
+                                {team}
+                              </option>
+                            ))}
+                          </select>
+                          {teamFilter !== 'all' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => setTeamFilter('all')}
+                              className="text-xs"
+                            >
+                              Clear Filter
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Add New Player */}
                     {isEditing && (
@@ -738,7 +800,7 @@ export default function FantasyRoastersPage() {
 
                     {/* Players Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                      {(roaster.players ?? []).map((player, idx) => (
+                      {filteredPlayers.map((player, idx) => (
                         <Card key={`${player?.pid ?? 'pid-missing'}-${player?.team?.tid ?? 'team-missing'}-${idx}`} className="p-4 hover:shadow-md transition-shadow">
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex-1">
