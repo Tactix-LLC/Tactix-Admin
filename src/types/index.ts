@@ -110,17 +110,40 @@ export interface Competition {
   prize_pool?: number
 }
 
+// Player in Team Types
+export interface TeamPlayer {
+  full_name: string
+  pid: string
+  position: string
+  price: number
+  club: string
+  club_logo?: string
+  is_bench?: boolean
+  is_captain?: boolean
+  is_vice_captain?: boolean
+  is_switched?: boolean
+  fantasy_point?: number
+  final_fantasy_point?: number
+  minutesplayed?: number
+  goalscored?: number
+  assist?: number
+  [key: string]: string | number | boolean | undefined // Allow for additional fields
+}
+
 // Team Types
 export interface Team {
   _id: string
   name: string
-  user_id: string
+  user_id?: string
+  client_id?: string
   game_week_id?: string
-  players: string[]
+  players: TeamPlayer[] | string[] // Can be array of objects or strings
   formation?: string
   captain_id?: string
   vice_captain_id?: string
   total_points?: number
+  total_fantasy_point?: number
+  budget?: number
   created_at: string
   updated_at: string
 }

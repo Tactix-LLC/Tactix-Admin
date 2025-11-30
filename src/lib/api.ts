@@ -470,6 +470,11 @@ export const teamsAPI = {
     const response = await api.delete(`/api/v1/team/${id}`)
     return response.data
   },
+  
+  getByClientId: async (clientId: string): Promise<ApiResponse<{ team: Team }>> => {
+    const response = await api.get(`/api/v1/team/${clientId}/clientteam`)
+    return response.data
+  },
 }
 
 // Players API
