@@ -296,7 +296,10 @@ export const gameWeeksAPI = {
   // Fetch player stats for a game week
   fetchPlayerStats: async (id: string): Promise<ApiResponse<{ message: string }>> => {
     console.log('🔍 [API] Calling fetchPlayerStats:', { id, url: `/api/v1/gameweek/${id}/fetchplayerstat` })
-    const response = await api.get(`/api/v1/gameweek/${id}/fetchplayerstat`)
+    // Use longer timeout for fetchPlayerStats as it makes multiple external API calls
+    const response = await api.get(`/api/v1/gameweek/${id}/fetchplayerstat`, {
+      timeout: 1200000, // 120 seconds timeout for fetching player stats
+    })
     console.log('✅ [API] fetchPlayerStats response:', response.data)
     return response.data
   },
@@ -1274,6 +1277,29 @@ export const notificationAPI = {
   // Get completed notifications
   getCompletedNotifications: async (): Promise<ApiResponse<{ completedJobs: Array<{ gameWeekId: string; scheduledTime: string; actualExecutionTime: string; status: string; message?: string }> }>> => {
     const response = await api.get('/api/v1/notification/completed')
+    return response.data
+  },
+
+  // Get all notifications (scheduled + completed) with unified format
+  getAllNotifications: async (): Promise<ApiResponse<{ 
+    notifications: Array<{
+      gameWeekId: string;
+      gameWeek: string;
+      status: 'scheduled' | 'pending' | 'completed';
+      nextInvocation: string | null;
+      executedAt: Date | null;
+      timeUntilNotification: number | null;
+      transferDeadline: string | null;
+      successCount: number | null;
+      failureCount: number | null;
+      totalUsers: number | null;
+    }>;
+    count: number;
+    scheduled: number;
+    pending: number;
+    completed: number;
+  }>> => {
+    const response = await api.get('/api/v1/notification/all')
     return response.data
   },
 

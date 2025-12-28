@@ -29,6 +29,9 @@ export interface User {
   has_team?: boolean
   agent_code?: string
   credit?: number
+  canReceiveNotifications?: boolean
+  fcm_token?: string
+  environment?: string
   // Legacy fields for backward compatibility
   name?: string
   status?: 'active' | 'inactive' | 'banned' | 'pending'
