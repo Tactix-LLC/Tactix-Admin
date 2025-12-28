@@ -46,6 +46,8 @@ import {
   Users2,
   CheckCircle2,
   XCircle,
+  Bell,
+  BellOff,
 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { User as UserType, Team, TeamPlayer } from "@/types"
@@ -401,6 +403,9 @@ export default function UsersPage() {
                       Status
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Notifications
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Team
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -436,6 +441,19 @@ export default function UsersPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {getStatusBadge(user.account_status)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {user.canReceiveNotifications ? (
+                          <Badge className="bg-green-100 text-green-800" title="Can receive notifications">
+                            <Bell className="w-3 h-3 mr-1 inline" />
+                            Enabled
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="bg-gray-100 text-gray-600" title="Cannot receive notifications - No FCM token or environment mismatch">
+                            <BellOff className="w-3 h-3 mr-1 inline" />
+                            Disabled
+                          </Badge>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {user.has_team ? (

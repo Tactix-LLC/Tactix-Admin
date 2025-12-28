@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { notificationAPI } from "@/lib/api"
+import { notificationAPI, usersAPI } from "@/lib/api"
+import { User as UserType } from "@/types"
 import { MainLayout } from "@/components/layout/main-layout"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -15,15 +16,15 @@ import {
   Users, 
   Target, 
   MessageSquare, 
-  Settings,
   TestTube,
-  BarChart3,
   RefreshCw,
   X,
   CheckCircle,
   AlertCircle,
-  Clock
+  Clock,
+  Search
 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useUIStore } from "@/lib/store"
 
 interface NotificationTemplate {
@@ -58,7 +59,7 @@ interface SendToTopicData extends SendNotificationData {
 }
 
 export default function NotificationsPage() {
-  const [activeTab, setActiveTab] = useState<'send' | 'templates' | 'stats' | 'test'>('send')
+  const [activeTab, setActiveTab] = useState<'send' | 'templates' | 'tracking' | 'test'>('send')
   const [notificationType, setNotificationType] = useState<'all' | 'users' | 'topic'>('all')
   const [selectedTemplate, setSelectedTemplate] = useState<NotificationTemplate | null>(null)
   
@@ -91,10 +92,38 @@ export default function NotificationsPage() {
     queryFn: () => notificationAPI.getNotificationStats(),
   })
 
+  // Fetch all notifications for tracking
+  const { data: allNotificationsData, refetch: refetchAllNotifications } = useQuery({
+    queryKey: ["all-notifications"],
+    queryFn: () => notificationAPI.getAllNotifications(),
+    refetchInterval: 30000, // Refresh every 30 seconds
+  })
+
   // Fetch notification templates
   const { data: templatesData } = useQuery({
     queryKey: ["notification-templates"],
     queryFn: () => notificationAPI.getNotificationTemplates(),
+  })
+
+  // Fetch users for user selection (only when "users" notification type is selected)
+  const { data: usersData } = useQuery({
+    queryKey: ["users-for-notifications"],
+    queryFn: async () => {
+      const result = await usersAPI.getAll({ limit: 10000 })
+      return result.data?.data || []
+    },
+    enabled: notificationType === 'users', // Only fetch when "users" type is selected
+  })
+
+  const [userSearchTerm, setUserSearchTerm] = useState("")
+  const allUsers: UserType[] = usersData || []
+  const filteredUsers = allUsers.filter((user) => {
+    const searchLower = userSearchTerm.toLowerCase()
+    return (
+      user.first_name?.toLowerCase().includes(searchLower) ||
+      user.last_name?.toLowerCase().includes(searchLower) ||
+      user.email?.toLowerCase().includes(searchLower)
+    )
   })
 
   const stats: NotificationStats = statsData?.data || {
@@ -152,6 +181,44 @@ export default function NotificationsPage() {
     }
   })
 
+  // Send notification to specific users mutation
+  const sendNotificationToUsersMutation = useMutation({
+    mutationFn: (data: SendToUsersData) => notificationAPI.sendNotificationToUsers(data),
+    onSuccess: (data) => {
+      const successCount = data.data?.successCount || 0
+      const failureCount = data.data?.failureCount || 0
+      const totalUsers = data.data?.totalUsers || 0
+      
+      if (successCount === 0 && failureCount === 0) {
+        // No notifications were sent
+        addNotification({
+          id: Date.now().toString(),
+          type: 'warning',
+          title: 'No Notifications Sent',
+          message: data.message || 'None of the selected users have FCM tokens registered or are in a different environment. Make sure users have the app installed and have logged in.'
+        })
+      } else {
+        addNotification({
+          id: Date.now().toString(),
+          type: 'success',
+          title: 'Success',
+          message: `Notification sent successfully! Success: ${successCount}, Failed: ${failureCount} (out of ${totalUsers} eligible users)`
+        })
+        // Clear selected users only on success
+        setUsersNotification(prev => ({ ...prev, user_ids: [] }))
+      }
+      refetchStats()
+    },
+    onError: (error: Error & { response?: { data?: { message?: string } } }) => {
+      addNotification({
+        id: Date.now().toString(),
+        type: 'error',
+        title: 'Error',
+        message: error.response?.data?.message || error.message || 'Failed to send notification'
+      })
+    }
+  })
+
   const handleTemplateSelect = (template: NotificationTemplate) => {
     setSelectedTemplate(template)
     if (notificationType === 'all') {
@@ -189,8 +256,63 @@ export default function NotificationsPage() {
         return
       }
       sendCustomNotificationMutation.mutate(customNotification)
+    } else if (notificationType === 'users') {
+      if (!usersNotification.title || !usersNotification.body) {
+        addNotification({
+          id: Date.now().toString(),
+          type: 'error',
+          title: 'Error',
+          message: 'Title and body are required'
+        })
+        return
+      }
+      if (!usersNotification.user_ids || usersNotification.user_ids.length === 0) {
+        addNotification({
+          id: Date.now().toString(),
+          type: 'error',
+          title: 'Error',
+          message: 'Please select at least one user'
+        })
+        return
+      }
+      
+      // Check if any selected users can receive notifications
+      const selectedUsers = allUsers.filter(user => usersNotification.user_ids?.includes(user._id))
+      const eligibleUsers = selectedUsers.filter(user => user.canReceiveNotifications === true)
+      
+      if (eligibleUsers.length === 0) {
+        addNotification({
+          id: Date.now().toString(),
+          type: 'warning',
+          title: 'Warning',
+          message: `None of the ${selectedUsers.length} selected user(s) can receive notifications. They may not have FCM tokens registered or are in a different environment. Do you want to send anyway?`,
+        })
+        // Still allow sending - the backend will handle it properly
+      }
+      
+      sendNotificationToUsersMutation.mutate(usersNotification)
+    } else if (notificationType === 'topic') {
+      // Handle topic notifications if needed
+      addNotification({
+        id: Date.now().toString(),
+        type: 'error',
+        title: 'Error',
+        message: 'Topic notifications are not yet implemented'
+      })
     }
-    // Add handlers for users and topic notifications
+  }
+
+  const handleUserToggle = (userId: string) => {
+    setUsersNotification(prev => {
+      const userIds = prev.user_ids || []
+      const isSelected = userIds.includes(userId)
+      return {
+        ...prev,
+        user_ids: isSelected
+          ? userIds.filter(id => id !== userId)
+          : [...userIds, userId]
+      }
+    })
   }
 
   const getCategoryColor = (category: string) => {
@@ -289,6 +411,17 @@ export default function NotificationsPage() {
             >
               <MessageSquare className="h-4 w-4 inline mr-2" />
               Templates
+            </button>
+            <button
+              onClick={() => setActiveTab('tracking')}
+              className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'tracking'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+              }`}
+            >
+              <Clock className="h-4 w-4 inline mr-2" />
+              Tracking
             </button>
             <button
               onClick={() => setActiveTab('test')}
@@ -396,14 +529,88 @@ export default function NotificationsPage() {
                     </div>
                   )}
 
+                  {notificationType === 'users' && (
+                    <div>
+                      <Label>Select Users ({usersNotification.user_ids?.length || 0} selected)</Label>
+                      
+                      {/* Search input */}
+                      <div className="relative mt-2 mb-4">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                        <Input
+                          placeholder="Search users by name or email..."
+                          value={userSearchTerm}
+                          onChange={(e) => setUserSearchTerm(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+
+                      {/* User list with checkboxes */}
+                      <div className="border rounded-lg p-4 max-h-64 overflow-y-auto space-y-2">
+                        {filteredUsers.length === 0 ? (
+                          <p className="text-sm text-gray-500 text-center py-4">
+                            {userSearchTerm ? 'No users found' : 'Loading users...'}
+                          </p>
+                        ) : (
+                          filteredUsers.map((user) => {
+                            const isSelected = usersNotification.user_ids?.includes(user._id) || false
+                            return (
+                              <div
+                                key={user._id}
+                                className="flex items-center space-x-3 p-2 hover:bg-gray-50 rounded cursor-pointer"
+                                onClick={() => handleUserToggle(user._id)}
+                              >
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={() => handleUserToggle(user._id)}
+                                />
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium">
+                                    {user.first_name} {user.last_name}
+                                  </div>
+                                  <div className="text-xs text-gray-500">{user.email}</div>
+                                  {user.canReceiveNotifications !== undefined && (
+                                    <div className="text-xs mt-1">
+                                      {user.canReceiveNotifications ? (
+                                        <Badge className="bg-green-100 text-green-800 text-xs">
+                                          <Bell className="w-3 h-3 mr-1 inline" />
+                                          Can receive
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="bg-gray-100 text-gray-600 text-xs">
+                                          <X className="w-3 h-3 mr-1 inline" />
+                                          Cannot receive
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })
+                        )}
+                      </div>
+
+                      {usersNotification.user_ids && usersNotification.user_ids.length > 0 && (
+                        <div className="mt-2 text-sm text-gray-600">
+                          {usersNotification.user_ids.length} user(s) selected
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="flex justify-end">
                     <Button
                       onClick={handleSendNotification}
-                      disabled={sendCustomNotificationMutation.isPending}
+                      disabled={
+                        sendCustomNotificationMutation.isPending || 
+                        sendNotificationToUsersMutation.isPending
+                      }
                       className="flex items-center gap-2"
                     >
                       <Send className="h-4 w-4" />
-                      {sendCustomNotificationMutation.isPending ? 'Sending...' : 'Send Notification'}
+                      {(sendCustomNotificationMutation.isPending || sendNotificationToUsersMutation.isPending) 
+                        ? 'Sending...' 
+                        : 'Send Notification'}
                     </Button>
                   </div>
                 </div>
@@ -446,6 +653,158 @@ export default function NotificationsPage() {
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Tracking Tab */}
+        {activeTab === 'tracking' && (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Notification Tracking</CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => refetchAllNotifications()}
+                    className="flex items-center gap-2"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                    Refresh
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {allNotificationsData?.data?.notifications && allNotificationsData.data.notifications.length > 0 ? (
+                  <div className="space-y-4">
+                    {/* Summary Cards */}
+                    <div className="grid gap-4 md:grid-cols-3 mb-6">
+                      <Card>
+                        <CardContent className="pt-6">
+                          <div className="text-2xl font-bold text-blue-600">{allNotificationsData.data.scheduled}</div>
+                          <p className="text-xs text-muted-foreground">Scheduled</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="pt-6">
+                          <div className="text-2xl font-bold text-yellow-600">{allNotificationsData.data.pending}</div>
+                          <p className="text-xs text-muted-foreground">Pending</p>
+                        </CardContent>
+                      </Card>
+                      <Card>
+                        <CardContent className="pt-6">
+                          <div className="text-2xl font-bold text-green-600">{allNotificationsData.data.completed}</div>
+                          <p className="text-xs text-muted-foreground">Completed</p>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Notifications Table */}
+                    <div className="border rounded-lg overflow-hidden">
+                      <table className="w-full">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Game Week</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Schedule/Execute Time</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transfer Deadline</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Success</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Failed</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Users</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {allNotificationsData.data.notifications.map((notification) => {
+                            const formatDate = (dateStr: string | null) => {
+                              if (!dateStr) return 'N/A';
+                              return new Date(dateStr).toLocaleString();
+                            };
+
+                            const formatTimeUntil = (minutes: number | null) => {
+                              if (minutes === null) return 'N/A';
+                              if (minutes < 0) return 'Overdue';
+                              if (minutes < 60) return `${Math.round(minutes)} min`;
+                              const hours = Math.floor(minutes / 60);
+                              const mins = Math.round(minutes % 60);
+                              return `${hours}h ${mins}m`;
+                            };
+
+                            const getStatusBadge = (status: string) => {
+                              switch (status) {
+                                case 'scheduled':
+                                  return <Badge className="bg-blue-100 text-blue-800">Scheduled</Badge>;
+                                case 'pending':
+                                  return <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>;
+                                case 'completed':
+                                  return <Badge className="bg-green-100 text-green-800">Completed</Badge>;
+                                default:
+                                  return <Badge>{status}</Badge>;
+                              }
+                            };
+
+                            return (
+                              <tr key={notification.gameWeekId} className="hover:bg-gray-50">
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  <div className="text-sm font-medium text-gray-900">{notification.gameWeek}</div>
+                                  <div className="text-xs text-gray-500">{notification.gameWeekId.slice(-8)}</div>
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                  {getStatusBadge(notification.status)}
+                                  {notification.status === 'scheduled' && notification.timeUntilNotification !== null && (
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      {formatTimeUntil(notification.timeUntilNotification)}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                  {notification.status === 'completed' && notification.executedAt ? (
+                                    <div>
+                                      <div>{formatDate(typeof notification.executedAt === 'string' ? notification.executedAt : notification.executedAt.toString())}</div>
+                                    </div>
+                                  ) : notification.nextInvocation ? (
+                                    <div>
+                                      <div>{formatDate(notification.nextInvocation)}</div>
+                                    </div>
+                                  ) : (
+                                    'N/A'
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                  {formatDate(notification.transferDeadline)}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                  {notification.successCount !== null ? (
+                                    <span className="text-green-600 font-medium">{notification.successCount}</span>
+                                  ) : (
+                                    <span className="text-gray-400">-</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm">
+                                  {notification.failureCount !== null ? (
+                                    <span className="text-red-600 font-medium">{notification.failureCount}</span>
+                                  ) : (
+                                    <span className="text-gray-400">-</span>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                                  {notification.totalUsers !== null ? notification.totalUsers : '-'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-gray-500">
+                    <Bell className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                    <p>No notifications found</p>
+                    <p className="text-sm mt-2">Scheduled notifications will appear here once game weeks are created</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
