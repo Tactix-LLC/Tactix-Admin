@@ -26,6 +26,7 @@ import {
   FantasyPlayer,
   CreateFantasyRoasterData,
   UpdatePlayerRatingData,
+  UpdatePlayerInfoData,
   UpdateRoasterStatusData,
   AddPlayerData,
   Coach,
@@ -730,6 +731,16 @@ export const fantasyRoasterAPI = {
 
   updatePlayerRating: async (id: string, data: UpdatePlayerRatingData): Promise<ApiResponse<{ message: string }>> => {
     const response = await api.patch(`/api/v1/fantasyroaster/${id}/price`, data)
+    return response.data
+  },
+
+  updatePlayerInfo: async (id: string, data: UpdatePlayerInfoData): Promise<ApiResponse<{ message: string }>> => {
+    const response = await api.patch(`/api/v1/fantasyroaster/${id}/player`, data)
+    return response.data
+  },
+
+  getTeamsFromRoaster: async (id: string): Promise<ApiResponse<{ teams: Array<{ tid: string; tname: string; logo: string; fullname: string; abbr: string }> }>> => {
+    const response = await api.get(`/api/v1/fantasyroaster/${id}/teams`)
     return response.data
   },
 

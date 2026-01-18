@@ -13,7 +13,7 @@ import { fantasyRoasterAPI, seasonsAPI, competitionsAPI } from '@/lib/api'
 import { 
   FantasyRoaster, 
   CreateFantasyRoasterData,
-  UpdatePlayerRatingData,
+  UpdatePlayerInfoData,
   UpdateRoasterStatusData,
   AddPlayerData,
   RemovePlayerData,
@@ -52,9 +52,24 @@ export default function FantasyRoastersPage() {
   const [showPlayers, setShowPlayers] = useState(false)
   const [selectedSeasonId, setSelectedSeasonId] = useState('')
   const [selectedCompetitionId, setSelectedCompetitionId] = useState('')
-  const [editingPlayer, setEditingPlayer] = useState<{ pid: string; rating: string } | null>(null)
+  const [editingPlayer, setEditingPlayer] = useState<{ 
+    pid: string
+    pname: string
+    role: string
+    rating: string
+    team: {
+      tid: string
+      tname: string
+      logo: string
+      fullname: string
+      abbr: string
+    }
+  } | null>(null)
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [teamFilter, setTeamFilter] = useState<string>('all')
+  const [playerSearchTerm, setPlayerSearchTerm] = useState<string>('')
+  const [availableTeams, setAvailableTeams] = useState<Array<{ tid: string; tname: string; logo: string; fullname: string; abbr: string }>>([])
+  const [loadingTeams, setLoadingTeams] = useState(false)
   const [newPlayer, setNewPlayer] = useState<AddPlayerData>({
     pid: '',
     pname: '',
@@ -198,20 +213,52 @@ export default function FantasyRoastersPage() {
     }
   }
 
-  const handleUpdatePlayerRating = async (roasterId: string, pid: string, rating: string) => {
+  const fetchTeams = async (roasterId: string) => {
+    setLoadingTeams(true)
     try {
-      const data: UpdatePlayerRatingData = {
-        pid,
-        rating: parseFloat(rating)
-      }
-      const response = await fantasyRoasterAPI.updatePlayerRating(roasterId, data)
-      if (response.status === 'SUCCESS') {
-        addNotification({ id: Date.now().toString(), type: 'success', title: 'Success', message: 'Player rating updated successfully' })
-        setEditingPlayer(null)
-        fetchRoasters()
+      const response = await fantasyRoasterAPI.getTeamsFromRoaster(roasterId)
+      if (response.status === 'SUCCESS' && response.data?.teams) {
+        setAvailableTeams(response.data.teams)
       }
     } catch {
-      addNotification({ id: Date.now().toString(), type: 'error', title: 'Error', message: 'Failed to update player rating' })
+      addNotification({ id: Date.now().toString(), type: 'error', title: 'Error', message: 'Failed to fetch teams' })
+    } finally {
+      setLoadingTeams(false)
+    }
+  }
+
+  const handleUpdatePlayerInfo = async (roasterId: string) => {
+    if (!editingPlayer) return
+    
+    try {
+      const data: UpdatePlayerInfoData = {
+        pid: editingPlayer.pid,
+      }
+      
+      // Only include fields that have changed or are being edited
+      if (editingPlayer.pname) data.pname = editingPlayer.pname
+      if (editingPlayer.role) data.role = editingPlayer.role
+      if (editingPlayer.rating) data.rating = parseFloat(editingPlayer.rating)
+      if (editingPlayer.team) data.team = editingPlayer.team
+      
+      const response = await fantasyRoasterAPI.updatePlayerInfo(roasterId, data)
+      if (response.status === 'SUCCESS') {
+        addNotification({ id: Date.now().toString(), type: 'success', title: 'Success', message: 'Player information updated successfully' })
+        setEditingPlayer(null)
+        
+        // Fetch updated roasters and update selected roaster
+        const updatedResponse = await fantasyRoasterAPI.getFantasyRoasters()
+        const updatedList = Array.isArray(updatedResponse.data) ? updatedResponse.data : []
+        setRoasters(updatedList)
+        
+        // Update selected roaster with the updated data
+        const updatedRoaster = updatedList.find(r => r._id === roasterId)
+        if (updatedRoaster) {
+          setSelectedRoaster(updatedRoaster)
+        }
+      }
+    } catch {
+      addNotification({ id: Date.now().toString(), type: 'error', title: 'Error', message: 'Failed to update player information' })
     }
   }
 
@@ -309,14 +356,29 @@ export default function FantasyRoastersPage() {
     return Array.from(teams).sort()
   }, [selectedRoaster, showPlayers])
 
-  // Filter players by team for selected roaster
+  // Filter players by team and name for selected roaster
   const filteredPlayers = useMemo(() => {
     if (!selectedRoaster?.players || !showPlayers) return []
-    if (teamFilter === 'all') return selectedRoaster.players
-    return selectedRoaster.players.filter((player) => 
-      player?.team?.tname === teamFilter
-    )
-  }, [selectedRoaster, teamFilter, showPlayers])
+    
+    let filtered = selectedRoaster.players
+    
+    // Filter by team/club
+    if (teamFilter !== 'all') {
+      filtered = filtered.filter((player) => 
+        player?.team?.tname === teamFilter
+      )
+    }
+    
+    // Filter by player name
+    if (playerSearchTerm.trim() !== '') {
+      const searchLower = playerSearchTerm.toLowerCase().trim()
+      filtered = filtered.filter((player) => 
+        (player?.pname || '').toLowerCase().includes(searchLower)
+      )
+    }
+    
+    return filtered
+  }, [selectedRoaster, teamFilter, playerSearchTerm, showPlayers])
 
 
   if (loading && roasters.length === 0) {
@@ -668,7 +730,11 @@ export default function FantasyRoastersPage() {
                         <h4 className="text-lg font-semibold">Squad Players</h4>
                         <p className="text-sm text-gray-600">
                           {filteredPlayers.length} of {roaster.players?.length ?? 0} players
-                          {teamFilter !== 'all' && ` (Filtered: ${teamFilter})`}
+                          {(teamFilter !== 'all' || playerSearchTerm.trim() !== '') && (
+                            <span>
+                              {' '}(Filtered{teamFilter !== 'all' ? `: ${teamFilter}` : ''}{teamFilter !== 'all' && playerSearchTerm.trim() !== '' ? ', ' : ''}{playerSearchTerm.trim() !== '' ? `search: "${playerSearchTerm}"` : ''})
+                            </span>
+                          )}
                         </p>
                       </div>
                       <Button 
@@ -682,9 +748,32 @@ export default function FantasyRoastersPage() {
                       </Button>
                     </div>
 
-                    {/* Team Filter */}
-                    {uniqueTeams.length > 0 && (
-                      <div className="mb-6">
+                    {/* Player Search and Team Filter */}
+                    <div className="mb-6 space-y-4">
+                      {/* Player Name Search */}
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                        <Input
+                          type="text"
+                          placeholder="Search players by name..."
+                          value={playerSearchTerm}
+                          onChange={(e) => setPlayerSearchTerm(e.target.value)}
+                          className="pl-10"
+                        />
+                        {playerSearchTerm && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setPlayerSearchTerm('')}
+                            className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        )}
+                      </div>
+                      
+                      {/* Team Filter */}
+                      {uniqueTeams.length > 0 && (
                         <div className="flex items-center gap-3">
                           <Filter className="h-4 w-4 text-gray-500" />
                           <Label className="text-sm font-medium text-gray-700">Filter by Team/Club:</Label>
@@ -700,19 +789,22 @@ export default function FantasyRoastersPage() {
                               </option>
                             ))}
                           </select>
-                          {teamFilter !== 'all' && (
+                          {(teamFilter !== 'all' || playerSearchTerm.trim() !== '') && (
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => setTeamFilter('all')}
+                              onClick={() => {
+                                setTeamFilter('all')
+                                setPlayerSearchTerm('')
+                              }}
                               className="text-xs"
                             >
-                              Clear Filter
+                              Clear All Filters
                             </Button>
                           )}
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
 
                     {/* Add New Player */}
                     {isEditing && (
@@ -749,10 +841,10 @@ export default function FantasyRoastersPage() {
                               className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                             >
                               <option value="">Select position</option>
-                              <option value="GK">Goalkeeper</option>
-                              <option value="DEF">Defender</option>
-                              <option value="MID">Midfielder</option>
-                              <option value="FWD">Forward</option>
+                              <option value="Goalkeeper">Goalkeeper</option>
+                              <option value="Defender">Defender</option>
+                              <option value="Midfielder">Midfielder</option>
+                              <option value="Forward">Forward</option>
                             </select>
                           </div>
                           <div>
@@ -767,22 +859,43 @@ export default function FantasyRoastersPage() {
                             />
                           </div>
                           <div>
-                            <Label htmlFor="team_name">Team Name</Label>
-                            <Input
-                              id="team_name"
-                              placeholder="Enter team name"
-                              value={newPlayer.tname}
-                              onChange={(e) => setNewPlayer({...newPlayer, tname: e.target.value})}
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="team_abbr">Team Abbreviation</Label>
-                            <Input
-                              id="team_abbr"
-                              placeholder="e.g., MUN, ARS"
-                              value={newPlayer.abbr}
-                              onChange={(e) => setNewPlayer({...newPlayer, abbr: e.target.value})}
-                            />
+                            <Label htmlFor="team_select">Team/Club</Label>
+                            <select
+                              id="team_select"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                              value={newPlayer.tid || ''}
+                              onChange={(e) => {
+                                const selectedTeamId = e.target.value
+                                const selectedTeam = availableTeams.find(t => t.tid === selectedTeamId)
+                                if (selectedTeam) {
+                                  setNewPlayer({
+                                    ...newPlayer,
+                                    tid: selectedTeam.tid,
+                                    tname: selectedTeam.tname,
+                                    abbr: selectedTeam.abbr,
+                                    fullname: selectedTeam.fullname,
+                                    logo: selectedTeam.logo
+                                  })
+                                }
+                              }}
+                              disabled={loadingTeams || availableTeams.length === 0}
+                              onFocus={() => {
+                                // Fetch teams when focusing on the dropdown if not already loaded
+                                if (availableTeams.length === 0 && selectedRoaster) {
+                                  fetchTeams(selectedRoaster._id)
+                                }
+                              }}
+                            >
+                              <option value="">Select a team...</option>
+                              {availableTeams.map((team) => (
+                                <option key={team.tid} value={team.tid}>
+                                  {team.tname} ({team.abbr})
+                                </option>
+                              ))}
+                            </select>
+                            {loadingTeams && (
+                              <p className="text-xs text-gray-500 mt-1">Loading teams...</p>
+                            )}
                           </div>
                         </div>
                         <div className="flex justify-end mt-4">
@@ -804,10 +917,21 @@ export default function FantasyRoastersPage() {
                         <Card key={`${player?.pid ?? 'pid-missing'}-${player?.team?.tid ?? 'team-missing'}-${idx}`} className="p-4 hover:shadow-md transition-shadow">
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex-1">
-                              <h6 className="font-semibold text-gray-900">{player.pname}</h6>
+                              {editingPlayer?.pid === player.pid ? (
+                                <Input
+                                  className="w-full text-sm font-semibold mb-1"
+                                  value={editingPlayer.pname}
+                                  onChange={(e) => setEditingPlayer({
+                                    ...editingPlayer,
+                                    pname: e.target.value
+                                  })}
+                                />
+                              ) : (
+                                <h6 className="font-semibold text-gray-900">{player.pname}</h6>
+                              )}
                               <p className="text-xs text-gray-500">ID: {player.pid}</p>
                             </div>
-                            {isEditing && (
+                            {isEditing && !editingPlayer && (
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -820,50 +944,124 @@ export default function FantasyRoastersPage() {
                           </div>
 
                           <div className="space-y-2 mb-3">
-                            <div className="flex items-center justify-between">
-                              <Badge 
-                                variant="outline"
-                                className={`
-                                  ${player.role === 'GK' ? 'bg-yellow-100 text-yellow-800' : ''}
-                                  ${player.role === 'DEF' ? 'bg-blue-100 text-blue-800' : ''}
-                                  ${player.role === 'MID' ? 'bg-green-100 text-green-800' : ''}
-                                  ${player.role === 'FWD' ? 'bg-red-100 text-red-800' : ''}
-                                `}
-                              >
-                                {player.role}
-                              </Badge>
-                              <div className="text-right">
-                                {editingPlayer?.pid === player.pid ? (
-                                  <div className="flex gap-1">
-                                    <Input
-                                      className="w-16 h-6 text-xs"
-                                      value={editingPlayer.rating}
-                                      onChange={(e) => setEditingPlayer({
-                                        ...editingPlayer,
-                                        rating: e.target.value
-                                      })}
-                                    />
-                                    <Button
-                                      size="sm"
-                                      onClick={() => handleUpdatePlayerRating(
-                                        roaster._id, 
-                                        player.pid, 
-                                        editingPlayer.rating
-                                      )}
-                                      className="h-6 w-6 p-0"
-                                    >
-                                      <Check className="h-3 w-3" />
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => setEditingPlayer(null)}
-                                      className="h-6 w-6 p-0"
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                ) : (
+                            {editingPlayer?.pid === player.pid ? (
+                              <div className="space-y-2">
+                                {/* Position/Role */}
+                                <div>
+                                  <Label className="text-xs text-gray-600">Position</Label>
+                                  <select
+                                    key={`role-select-${editingPlayer.pid}-${editingPlayer.role}`}
+                                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded"
+                                    value={editingPlayer.role}
+                                    onChange={(e) => setEditingPlayer({
+                                      ...editingPlayer,
+                                      role: e.target.value
+                                    })}
+                                  >
+                                    <option value="Goalkeeper">Goalkeeper</option>
+                                    <option value="Defender">Defender</option>
+                                    <option value="Midfielder">Midfielder</option>
+                                    <option value="Forward">Forward</option>
+                                  </select>
+                                </div>
+
+                                {/* Rating */}
+                                <div>
+                                  <Label className="text-xs text-gray-600">Rating</Label>
+                                  <Input
+                                    className="w-full text-xs"
+                                    type="number"
+                                    step="0.1"
+                                    value={editingPlayer.rating}
+                                    onChange={(e) => setEditingPlayer({
+                                      ...editingPlayer,
+                                      rating: e.target.value
+                                    })}
+                                  />
+                                </div>
+
+                                {/* Team/Club */}
+                                <div>
+                                  <Label className="text-xs text-gray-600">Team/Club</Label>
+                                  <select
+                                    className="w-full px-2 py-1 text-xs border border-gray-300 rounded mb-1"
+                                    value={editingPlayer.team.tid || ''}
+                                    onChange={(e) => {
+                                      const selectedTeamId = e.target.value
+                                      const selectedTeam = availableTeams.find(t => t.tid === selectedTeamId)
+                                      if (selectedTeam) {
+                                        setEditingPlayer({
+                                          ...editingPlayer,
+                                          team: {
+                                            tid: selectedTeam.tid,
+                                            tname: selectedTeam.tname,
+                                            abbr: selectedTeam.abbr,
+                                            fullname: selectedTeam.fullname,
+                                            logo: selectedTeam.logo
+                                          }
+                                        })
+                                      }
+                                    }}
+                                    disabled={loadingTeams}
+                                  >
+                                    <option value="">Select a team...</option>
+                                    {availableTeams.map((team) => (
+                                      <option key={team.tid} value={team.tid}>
+                                        {team.tname} ({team.abbr})
+                                      </option>
+                                    ))}
+                                  </select>
+                                  {loadingTeams && (
+                                    <p className="text-xs text-gray-500 mt-1">Loading teams...</p>
+                                  )}
+                                  {!loadingTeams && availableTeams.length === 0 && (
+                                    <p className="text-xs text-gray-500 mt-1">No teams available. Populate players first.</p>
+                                  )}
+                                </div>
+                                
+                                {/* Display team details (read-only for reference) */}
+                                <div className="text-xs text-gray-500 space-y-1 pt-1 border-t">
+                                  <div>ID: {editingPlayer.team.tid || '-'}</div>
+                                  <div>Name: {editingPlayer.team.tname || '-'}</div>
+                                  <div>Abbr: {editingPlayer.team.abbr || '-'}</div>
+                                  <div>Full: {editingPlayer.team.fullname || '-'}</div>
+                                  <div className="truncate">Logo: {editingPlayer.team.logo || '-'}</div>
+                                </div>
+
+                                {/* Action Buttons */}
+                                <div className="flex gap-1 mt-2">
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleUpdatePlayerInfo(roaster._id)}
+                                    className="flex-1 h-7 text-xs"
+                                  >
+                                    <Check className="h-3 w-3 mr-1" />
+                                    Save
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setEditingPlayer(null)}
+                                    className="h-7 px-2"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="flex items-center justify-between">
+                                  <Badge 
+                                    variant="outline"
+                                    className={`
+                                      ${player.role === 'Goalkeeper' || player.role === 'GK' ? 'bg-yellow-100 text-yellow-800' : ''}
+                                      ${player.role === 'Defender' || player.role === 'DEF' ? 'bg-blue-100 text-blue-800' : ''}
+                                      ${player.role === 'Midfielder' || player.role === 'MID' ? 'bg-green-100 text-green-800' : ''}
+                                      ${player.role === 'Forward' || player.role === 'FWD' ? 'bg-red-100 text-red-800' : ''}
+                                    `}
+                                  >
+                                    {player.role === 'Goalkeeper' ? 'GK' : player.role === 'Defender' ? 'DEF' : player.role === 'Midfielder' ? 'MID' : player.role === 'Forward' ? 'FWD' : player.role}
+                                  </Badge>
                                   <div className="flex items-center gap-1">
                                     <Star className="h-3 w-3 text-yellow-500" />
                                     <span className="text-sm font-semibold">{player.rating}</span>
@@ -871,24 +1069,64 @@ export default function FantasyRoastersPage() {
                                       <Button
                                         size="sm"
                                         variant="ghost"
-                                        onClick={() => setEditingPlayer({
-                                          pid: player.pid,
-                                          rating: player.rating
-                                        })}
+                                        onClick={() => {
+                                          // Get the player's role and normalize to full name format
+                                          // Fantasy roaster should use: Goalkeeper, Defender, Midfielder, Forward
+                                          const validRoles = ['Goalkeeper', 'Defender', 'Midfielder', 'Forward']
+                                          const rawRole = String(player.role || '').trim()
+                                          
+                                          // Map abbreviations to full names
+                                          const roleMap: { [key: string]: string } = {
+                                            'GK': 'Goalkeeper',
+                                            'DEF': 'Defender',
+                                            'MID': 'Midfielder',
+                                            'FWD': 'Forward',
+                                            'Goalkeeper': 'Goalkeeper',
+                                            'Defender': 'Defender',
+                                            'Midfielder': 'Midfielder',
+                                            'Forward': 'Forward'
+                                          }
+                                          
+                                          // Normalize the role
+                                          const upperRole = rawRole.toUpperCase()
+                                          let normalizedRole = roleMap[upperRole] || roleMap[rawRole] || rawRole
+                                          
+                                          // Final check: if not a valid full name, default to Midfielder
+                                          if (!validRoles.includes(normalizedRole)) {
+                                            normalizedRole = 'Midfielder'
+                                          }
+                                          
+                                          setEditingPlayer({
+                                            pid: player.pid,
+                                            pname: player.pname || '',
+                                            role: normalizedRole,
+                                            rating: player.rating || '0',
+                                            team: { 
+                                              tid: player.team?.tid || '',
+                                              tname: player.team?.tname || '',
+                                              logo: player.team?.logo || '',
+                                              fullname: player.team?.fullname || '',
+                                              abbr: player.team?.abbr || ''
+                                            }
+                                          })
+                                          
+                                          // Fetch available teams when starting to edit
+                                          fetchTeams(roaster._id)
+                                        }}
                                         className="h-6 w-6 p-0"
                                       >
                                         <Edit className="h-3 w-3" />
                                       </Button>
                                     )}
                                   </div>
-                                )}
-                              </div>
-                            </div>
+                                </div>
 
-                            <div className="text-sm">
-                              <p className="font-medium text-gray-700">{player.team.tname}</p>
-                              <p className="text-gray-500">{player.team.abbr}</p>
-                            </div>
+                                <div className="text-sm">
+                                  <p className="font-medium text-gray-700">{player.team.tname}</p>
+                                  <p className="text-gray-500">{player.team.abbr}</p>
+                                </div>
+                              </>
+                            )}
                           </div>
 
                           {/* Player Status Badges */}
