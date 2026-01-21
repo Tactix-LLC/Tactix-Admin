@@ -67,15 +67,21 @@ interface SystemSettings {
     oauth_enabled: boolean;
     manual_data_override_enabled: boolean;
   };
+
+  // App status / season break
+  season_break_enabled: boolean;
+  season_break_title: string;
+  season_break_message: string;
 }
 
 export default function SystemSettingsPage() {
-  const [activeTab, setActiveTab] = useState<'point-system' | 'general' | 'features' | 'auto-join'>('point-system');
+  const [activeTab, setActiveTab] = useState<'point-system' | 'general' | 'features' | 'auto-join' | 'app-status'>('point-system');
   const [settings, setSettings] = useState<SystemSettings | null>(null);
   const [pointSystem, setPointSystem] = useState<SystemSettings['point_system'] | null>(null);
   const [generalSettings, setGeneralSettings] = useState<Partial<SystemSettings> | null>(null);
   const [features, setFeatures] = useState<SystemSettings['features'] | null>(null);
   const [autoJoinSettings, setAutoJoinSettings] = useState<SystemSettings['auto_join'] | null>(null);
+  const [appStatusSettings, setAppStatusSettings] = useState<Pick<SystemSettings, 'season_break_enabled' | 'season_break_title' | 'season_break_message'> | null>(null);
   
   const { addNotification } = useUIStore();
   const queryClient = useQueryClient();
@@ -177,6 +183,11 @@ export default function SystemSettingsPage() {
       });
       setFeatures(systemSettingsData.data.features);
       setAutoJoinSettings(systemSettingsData.data.auto_join);
+      setAppStatusSettings({
+        season_break_enabled: systemSettingsData.data.season_break_enabled,
+        season_break_title: systemSettingsData.data.season_break_title,
+        season_break_message: systemSettingsData.data.season_break_message,
+      });
     }
   }, [systemSettingsData]);
 
@@ -302,6 +313,17 @@ export default function SystemSettingsPage() {
           >
             <Users className="h-4 w-4 inline mr-2" />
             Auto-Join
+          </button>
+          <button
+            onClick={() => setActiveTab('app-status')}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'app-status'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            <Globe className="h-4 w-4 inline mr-2" />
+            App Status
           </button>
         </nav>
       </div>
@@ -985,6 +1007,92 @@ export default function SystemSettingsPage() {
                 <Save className="h-4 w-4" />
                 <span>Save Auto-Join Settings</span>
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* App Status Tab */}
+      {activeTab === 'app-status' && appStatusSettings && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-lg font-semibold mb-2 flex items-center">
+              <Globe className="h-5 w-5 mr-2 text-blue-500" />
+              Season Break / Maintenance Screen
+            </h3>
+            <p className="text-sm text-gray-600 mb-6">
+              When enabled, the mobile app will show a single locked page telling users to come back next season (even if they are logged in).
+            </p>
+
+            <div className="space-y-6">
+              <div className="flex items-center justify-between p-4 border rounded-lg bg-gray-50">
+                <div>
+                  <div className="font-medium text-gray-900">Enable Season Break Screen</div>
+                  <div className="text-sm text-gray-600">Blocks the whole app and shows only the message screen.</div>
+                </div>
+                <label className="inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={appStatusSettings.season_break_enabled}
+                    onChange={(e) => setAppStatusSettings({
+                      ...appStatusSettings,
+                      season_break_enabled: e.target.checked,
+                    })}
+                    className="sr-only"
+                  />
+                  <div className={`w-11 h-6 rounded-full transition-colors ${
+                    appStatusSettings.season_break_enabled ? 'bg-blue-600' : 'bg-gray-300'
+                  }`}>
+                    <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform translate-y-0.5 ${
+                      appStatusSettings.season_break_enabled ? 'translate-x-5' : 'translate-x-0.5'
+                    }`} />
+                  </div>
+                </label>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Title
+                  </label>
+                  <input
+                    type="text"
+                    value={appStatusSettings.season_break_title}
+                    onChange={(e) => setAppStatusSettings({
+                      ...appStatusSettings,
+                      season_break_title: e.target.value,
+                    })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Season Break"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Message
+                  </label>
+                  <textarea
+                    value={appStatusSettings.season_break_message}
+                    onChange={(e) => setAppStatusSettings({
+                      ...appStatusSettings,
+                      season_break_message: e.target.value,
+                    })}
+                    rows={5}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="We’re preparing the next season. Please come back when the new season starts."
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={() => updateSettingsMutation.mutate(appStatusSettings)}
+                  disabled={updateSettingsMutation.isPending}
+                  className="flex items-center space-x-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  <Save className="h-4 w-4" />
+                  <span>Save App Status</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
