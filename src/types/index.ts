@@ -240,6 +240,20 @@ export interface UpdatePlayerRatingData {
   rating: number
 }
 
+export interface UpdatePlayerInfoData {
+  pid: string
+  pname?: string
+  role?: string
+  rating?: number
+  team?: {
+    tid: string
+    tname: string
+    logo: string
+    fullname: string
+    abbr: string
+  }
+}
+
 export interface UpdateRoasterStatusData {
   is_active: boolean
 }
