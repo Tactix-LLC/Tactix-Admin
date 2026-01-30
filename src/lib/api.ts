@@ -228,7 +228,8 @@ export const gameWeeksAPI = {
   },
   
   create: async (data: CreateGameWeekData): Promise<ApiResponse<GameWeek>> => {
-    const response = await api.post('/api/v1/gameweek', data)
+    // Create fetches matches from Entity Sport (can be 5–10+ pages). Use 60s timeout.
+    const response = await api.post('/api/v1/gameweek', data, { timeout: 60000 })
     return response.data
   },
   
