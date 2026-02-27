@@ -19,6 +19,9 @@ import {
   XCircle,
   Users,
   UserCheck,
+  RefreshCw,
+  List,
+  X,
 } from "lucide-react"
 import { formatDateTime } from "@/lib/utils"
 import { gameWeekStatusOptions } from "@/lib/constants"
@@ -154,6 +157,110 @@ export default function GameWeeksPage() {
       alert("Error fetching player stats: " + detailedMessage)
     },
   })
+
+  type GWMatch = {
+    mid: string; round: string; status: string; date: string; venue: string | null;
+    home: { name: string; abbr: string; logo: string };
+    away: { name: string; abbr: string; logo: string };
+    result: { home: string; away: string; winner: string } | null;
+    is_rescheduled: boolean;
+  }
+  type BrowseMatch = Omit<GWMatch, "is_rescheduled"> & { already_added: boolean }
+
+  const [showMatchesModal, setShowMatchesModal] = useState(false)
+  const [matchesGW, setMatchesGW] = useState<GameWeek | null>(null)
+  const [matchesList, setMatchesList] = useState<GWMatch[]>([])
+  const [matchesMeta, setMatchesMeta] = useState<{ total: number; total_stored_ids: number; missing: number } | null>(null)
+  const [matchesLoading, setMatchesLoading] = useState(false)
+  const [matchesError, setMatchesError] = useState<string | null>(null)
+
+  // Browse & add matches state
+  const [showBrowsePanel, setShowBrowsePanel] = useState(false)
+  const [browsePage, setBrowsePage] = useState<string>("1")
+  const [browseResults, setBrowseResults] = useState<BrowseMatch[]>([])
+  const [browseLoading, setBrowseLoading] = useState(false)
+  const [browseError, setBrowseError] = useState<string | null>(null)
+  const [selectedMids, setSelectedMids] = useState<Set<string>>(new Set())
+  const [addingMids, setAddingMids] = useState(false)
+  const [removingMid, setRemovingMid] = useState<string | null>(null)
+
+  const reloadMatches = async (gw: GameWeek) => {
+    setMatchesLoading(true)
+    setMatchesError(null)
+    try {
+      const res = await gameWeeksAPI.getMatches(gw._id)
+      const d = (res as { data?: { matches?: GWMatch[]; total?: number; total_stored_ids?: number; missing?: number } }).data
+      setMatchesList(d?.matches ?? [])
+      setMatchesMeta({ total: d?.total ?? 0, total_stored_ids: d?.total_stored_ids ?? 0, missing: d?.missing ?? 0 })
+    } catch (e: unknown) {
+      setMatchesError(e instanceof Error ? e.message : "Failed to load matches")
+    } finally {
+      setMatchesLoading(false)
+    }
+  }
+
+  const handleViewMatches = async (gw: GameWeek) => {
+    setMatchesGW(gw)
+    setMatchesList([])
+    setMatchesMeta(null)
+    setMatchesError(null)
+    setShowBrowsePanel(false)
+    setBrowseResults([])
+    setSelectedMids(new Set())
+    setBrowsePage("1")
+    setShowMatchesModal(true)
+    await reloadMatches(gw)
+  }
+
+  const handleBrowse = async () => {
+    if (!matchesGW) return
+    setBrowseLoading(true)
+    setBrowseError(null)
+    setBrowseResults([])
+    setSelectedMids(new Set())
+    try {
+      const res = await gameWeeksAPI.browseMatches(matchesGW._id, parseInt(browsePage) || 1)
+      const d = (res as { data?: { matches?: BrowseMatch[] } }).data
+      setBrowseResults(d?.matches ?? [])
+    } catch (e: unknown) {
+      setBrowseError(e instanceof Error ? e.message : "Browse failed")
+    } finally {
+      setBrowseLoading(false)
+    }
+  }
+
+  const handleAddSelected = async () => {
+    if (!matchesGW || selectedMids.size === 0) return
+    setAddingMids(true)
+    const errors: string[] = []
+    for (const mid of Array.from(selectedMids)) {
+      try {
+        await gameWeeksAPI.addMatch(matchesGW._id, mid)
+      } catch (e: unknown) {
+        errors.push(`${mid}: ${e instanceof Error ? e.message : "failed"}`)
+      }
+    }
+    if (errors.length) alert("Some matches failed:\n" + errors.join("\n"))
+    setSelectedMids(new Set())
+    setBrowseResults(prev => prev.map(m => selectedMids.has(m.mid) ? { ...m, already_added: true } : m))
+    await reloadMatches(matchesGW)
+    setAddingMids(false)
+  }
+
+  const handleRemoveMatch = async (mid: string) => {
+    if (!matchesGW) return
+    if (!confirm(`Remove match ${mid} from GW${matchesGW.game_week}?`)) return
+    setRemovingMid(mid)
+    try {
+      await gameWeeksAPI.removeMatch(matchesGW._id, mid)
+      setMatchesList(prev => prev.filter(m => m.mid !== mid))
+      setMatchesMeta(prev => prev ? { ...prev, total: prev.total - 1, total_stored_ids: prev.total_stored_ids - 1 } : prev)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : "Failed to remove match")
+    } finally {
+      setRemovingMid(null)
+    }
+  }
 
   const [pollingGameWeekId, setPollingGameWeekId] = useState<string | null>(null)
   const [completionProgress, setCompletionProgress] = useState<{
@@ -668,6 +775,20 @@ export default function GameWeeksPage() {
                                 </Button>
                                 <span className="text-[10px] text-gray-500 mt-0.5">Fetch Stats</span>
                               </div>
+
+                              <div className="flex flex-col items-center">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleViewMatches(gameWeek)}
+                                  className="text-indigo-600 hover:text-indigo-800"
+                                  title="View Matches for this game week"
+                                >
+                                  <List className="h-4 w-4" />
+                                </Button>
+                                <span className="text-[10px] text-gray-500 mt-0.5">Matches</span>
+                              </div>
+
 
                               <div className="flex flex-col items-center">
                                 <Button 
@@ -1255,6 +1376,255 @@ export default function GameWeeksPage() {
                   variant="outline"
                   className="w-full"
                 >
+                  Close
+                </Button>
+              </div>
+            </Card>
+          </div>
+        )}
+        {/* View Matches Modal */}
+        {showMatchesModal && matchesGW && (
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+            <Card className="w-full max-w-5xl max-h-[92vh] flex flex-col">
+              {/* Header */}
+              <CardHeader className="flex-shrink-0 border-b pb-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <List className="h-5 w-5 text-indigo-600" />
+                      GW{matchesGW.game_week} — Fixtures
+                    </CardTitle>
+                    {matchesMeta && (
+                      <CardDescription className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="font-medium text-gray-700">{matchesMeta.total_stored_ids} match IDs stored</span>
+                        <span className="text-gray-400">·</span>
+                        <span>{matchesMeta.total} resolved from Entity Sport</span>
+                        {matchesMeta.missing > 0 && (
+                          <span className="text-amber-600 font-medium">{matchesMeta.missing} unresolved</span>
+                        )}
+                        {matchesList.some(m => m.is_rescheduled) && (
+                          <span className="px-2 py-0.5 bg-purple-100 text-purple-700 rounded font-semibold">
+                            Contains rescheduled fixtures
+                          </span>
+                        )}
+                      </CardDescription>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-indigo-600 border-indigo-300 hover:bg-indigo-50 gap-1"
+                      onClick={() => { setShowBrowsePanel(v => !v); setBrowseResults([]); setSelectedMids(new Set()) }}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Match
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setShowMatchesModal(false)}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardHeader>
+
+              {/* Browse & Add Panel */}
+              {showBrowsePanel && (
+                <div className="flex-shrink-0 border-b bg-indigo-50 p-4 space-y-3">
+                  <p className="text-sm font-semibold text-indigo-800">Browse Entity Sport page to find and add matches</p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={1}
+                      value={browsePage}
+                      onChange={e => setBrowsePage(e.target.value)}
+                      placeholder="Page number"
+                      className="w-28 px-3 py-1.5 border border-indigo-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    />
+                    <Button size="sm" onClick={handleBrowse} disabled={browseLoading} className="gap-1">
+                      {browseLoading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : null}
+                      {browseLoading ? "Loading…" : "Browse"}
+                    </Button>
+                    {selectedMids.size > 0 && (
+                      <Button
+                        size="sm"
+                        onClick={handleAddSelected}
+                        disabled={addingMids}
+                        className="bg-green-600 hover:bg-green-700 text-white gap-1"
+                      >
+                        {addingMids ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                        Add {selectedMids.size} selected
+                      </Button>
+                    )}
+                  </div>
+                  {browseError && <p className="text-red-600 text-xs">{browseError}</p>}
+                  {browseResults.length > 0 && (
+                    <div className="max-h-56 overflow-y-auto rounded border border-indigo-200 bg-white">
+                      <table className="w-full text-xs">
+                        <thead className="bg-indigo-50 sticky top-0">
+                          <tr>
+                            <th className="px-3 py-2 text-left w-8"></th>
+                            <th className="px-3 py-2 text-left">Match</th>
+                            <th className="px-3 py-2 text-center">Round</th>
+                            <th className="px-3 py-2 text-left">Date</th>
+                            <th className="px-3 py-2 text-center">Status</th>
+                            <th className="px-3 py-2 text-center">ID</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y">
+                          {browseResults.map(m => (
+                            <tr key={m.mid} className={m.already_added ? "opacity-40" : "hover:bg-indigo-50"}>
+                              <td className="px-3 py-2">
+                                {!m.already_added && (
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedMids.has(m.mid)}
+                                    onChange={e => {
+                                      const next = new Set(selectedMids)
+                                      e.target.checked ? next.add(m.mid) : next.delete(m.mid)
+                                      setSelectedMids(next)
+                                    }}
+                                    className="rounded border-gray-300"
+                                  />
+                                )}
+                                {m.already_added && <span className="text-green-600 text-[10px] font-bold">✓</span>}
+                              </td>
+                              <td className="px-3 py-2">
+                                <div className="flex items-center gap-1.5">
+                                  {m.home.logo && <img src={m.home.logo} alt="" className="w-4 h-4 object-contain" />}
+                                  <span className="font-medium">{m.home.name}</span>
+                                  <span className="text-gray-400">vs</span>
+                                  <span className="font-medium">{m.away.name}</span>
+                                  {m.away.logo && <img src={m.away.logo} alt="" className="w-4 h-4 object-contain" />}
+                                </div>
+                              </td>
+                              <td className="px-3 py-2 text-center text-gray-500">R{m.round}</td>
+                              <td className="px-3 py-2 text-gray-500 whitespace-nowrap">
+                                {new Date(m.date).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}
+                              </td>
+                              <td className="px-3 py-2 text-center capitalize text-gray-500">{m.status}</td>
+                              <td className="px-3 py-2 text-center font-mono text-gray-400">{m.mid}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {!browseLoading && !browseError && browseResults.length === 0 && (
+                    <p className="text-xs text-gray-500 italic">Enter a page number and click Browse</p>
+                  )}
+                </div>
+              )}
+
+              {/* Match List */}
+              <CardContent className="overflow-y-auto flex-1 p-0">
+                {matchesLoading && (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3">
+                    <RefreshCw className="h-8 w-8 text-indigo-500 animate-spin" />
+                    <p className="text-gray-500 text-sm">Loading fixtures from Entity Sport…</p>
+                  </div>
+                )}
+
+                {matchesError && (
+                  <div className="p-6">
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-sm">{matchesError}</div>
+                  </div>
+                )}
+
+                {!matchesLoading && !matchesError && matchesList.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-16 gap-2 text-gray-400">
+                    <List className="h-10 w-10" />
+                    <p className="text-sm">No matches stored for this game week yet</p>
+                  </div>
+                )}
+
+                {!matchesLoading && matchesList.length > 0 && (
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Match</th>
+                        <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Result</th>
+                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Date</th>
+                        <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Venue</th>
+                        <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Round</th>
+                        <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider">ID</th>
+                        <th className="px-4 py-3"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {matchesList
+                        .slice()
+                        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                        .map((match) => {
+                          const statusColor =
+                            match.status === "result" ? "bg-green-100 text-green-700"
+                            : match.status === "cancelled" ? "bg-red-100 text-red-700"
+                            : match.status === "live" || match.status === "progress" ? "bg-blue-100 text-blue-700"
+                            : "bg-gray-100 text-gray-600"
+
+                          return (
+                            <tr key={match.mid} className={`hover:bg-gray-50 ${match.is_rescheduled ? "bg-purple-50" : ""}`}>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  {match.home.logo && <img src={match.home.logo} alt={match.home.abbr} className="w-6 h-6 object-contain" />}
+                                  <span className="font-semibold text-gray-800">{match.home.name}</span>
+                                  <span className="text-gray-400 text-xs mx-1">vs</span>
+                                  <span className="font-semibold text-gray-800">{match.away.name}</span>
+                                  {match.away.logo && <img src={match.away.logo} alt={match.away.abbr} className="w-6 h-6 object-contain" />}
+                                  {match.is_rescheduled && (
+                                    <span className="ml-1 px-1.5 py-0.5 bg-purple-200 text-purple-700 rounded text-[10px] font-bold" title="Rescheduled — different round number">
+                                      DGW
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                {match.result
+                                  ? <span className="font-bold text-gray-800">{match.result.home} – {match.result.away}</span>
+                                  : <span className="text-gray-400 text-xs">—</span>}
+                              </td>
+                              <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
+                                {new Date(match.date).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                              </td>
+                              <td className="px-4 py-3 text-gray-500 text-xs max-w-[120px] truncate">{match.venue ?? "—"}</td>
+                              <td className="px-4 py-3 text-center">
+                                <span className={`px-2 py-0.5 rounded text-xs font-semibold ${match.is_rescheduled ? "bg-purple-100 text-purple-700" : "bg-gray-100 text-gray-600"}`}>
+                                  R{match.round}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${statusColor}`}>
+                                  {match.status}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3 text-center text-gray-400 text-xs font-mono">{match.mid}</td>
+                              <td className="px-4 py-3 text-center">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 text-red-400 hover:text-red-600 hover:bg-red-50"
+                                  title="Remove this match from the game week"
+                                  disabled={removingMid === match.mid}
+                                  onClick={() => handleRemoveMatch(match.mid)}
+                                >
+                                  {removingMid === match.mid
+                                    ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                                    : <X className="h-3.5 w-3.5" />}
+                                </Button>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                    </tbody>
+                  </table>
+                )}
+              </CardContent>
+
+              <div className="border-t p-3 bg-gray-50 flex-shrink-0 flex items-center justify-between">
+                <p className="text-xs text-gray-500">
+                  Purple rows / <span className="bg-purple-200 text-purple-700 px-1 rounded font-bold text-[10px]">DGW</span> = rescheduled fixtures (round ≠ GW{matchesGW.game_week}) &nbsp;·&nbsp; Red <span className="font-bold">×</span> to remove a match
+                </p>
+                <Button variant="outline" size="sm" onClick={() => setShowMatchesModal(false)}>
                   Close
                 </Button>
               </div>

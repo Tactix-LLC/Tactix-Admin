@@ -232,6 +232,45 @@ export const gameWeeksAPI = {
     const response = await api.post('/api/v1/gameweek', data, { timeout: 60000 })
     return response.data
   },
+
+  getMatches: async (id: string): Promise<ApiResponse<{
+    game_week: string;
+    matches: Array<{
+      mid: string; round: string; status: string; date: string; venue: string | null;
+      home: { name: string; abbr: string; logo: string };
+      away: { name: string; abbr: string; logo: string };
+      result: { home: string; away: string; winner: string } | null;
+      is_rescheduled: boolean;
+    }>;
+    total: number; total_stored_ids: number; missing: number;
+  }>> => {
+    const response = await api.get(`/api/v1/gameweek/${id}/matches`, { timeout: 60000 })
+    return response.data
+  },
+
+  removeMatch: async (id: string, matchId: string): Promise<ApiResponse<{ matchId: string }>> => {
+    const response = await api.delete(`/api/v1/gameweek/${id}/matches/${matchId}`)
+    return response.data
+  },
+
+  browseMatches: async (id: string, page: number): Promise<ApiResponse<{
+    matches: Array<{
+      mid: string; round: string; status: string; date: string; venue: string | null;
+      home: { name: string; abbr: string; logo: string };
+      away: { name: string; abbr: string; logo: string };
+      result: { home: string; away: string; winner: string } | null;
+      already_added: boolean;
+    }>;
+    page: number; has_more: boolean;
+  }>> => {
+    const response = await api.get(`/api/v1/gameweek/${id}/browse-matches?page=${page}`, { timeout: 30000 })
+    return response.data
+  },
+
+  addMatch: async (id: string, matchId: string): Promise<ApiResponse<unknown>> => {
+    const response = await api.patch(`/api/v1/gameweek/${id}/matchid`, { match_id: matchId })
+    return response.data
+  },
   
   update: async (id: string, data: Partial<CreateGameWeekData>): Promise<ApiResponse<GameWeek>> => {
     const response = await api.put(`/api/v1/gameweek/${id}`, data)
